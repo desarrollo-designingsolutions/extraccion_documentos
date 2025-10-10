@@ -1,13 +1,9 @@
-from fastapi import FastAPI
-import os
-
-# Importar DB y modelos para registrarlos
-from database import engine  # Para migraciones
-from models import ArchivoS3  # Registra el modelo en Base
-from migrations import run_migrations  # Función de migración
+from fastapi import FastAPI # type: ignore
+from migrations import run_migrations
 
 # Instancia de FastAPI
 app = FastAPI(title="API de Consultas a AWS S3", version="1.0.0")
+prefix = "/api/v1"
 
 # Evento de startup: Ejecuta migraciones al iniciar la app
 @app.on_event("startup")
@@ -16,7 +12,7 @@ async def startup_event():
 
 # Importar y montar el router de APIs
 from routers import router as api_router
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router, prefix=prefix)
 
 # Root endpoint para verificar que la app corre
 @app.get("/")

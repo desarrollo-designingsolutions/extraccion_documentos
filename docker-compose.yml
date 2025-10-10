@@ -17,7 +17,7 @@ services:
     ports:
       - "8002:8000"
     env_file:
-      - docker/mysql/.env
+      - .env
     depends_on:
       - db
     volumes:

@@ -45,24 +45,29 @@ class RespuestaExito(BaseModel):
     total_chunks: int
     objetos: List[dict]
 
+
 class PreguntaInput(BaseModel):
     id: int  # ID del registro en DB
     pregunta: str  # Texto de la pregunta
     score_threshold: float = 0.3  # Umbral mínimo de relevancia para chunks (0.0-1.0)
+
 
 class RespuestaLLM(BaseModel):
     respuesta: str  # Respuesta generada por el LLM
     distancia: float  # Distancia pgvector (0=alta similitud, 1=baja)
     chunks_utilizados: int  # Número de chunks usados para la respuesta
 
+
 class EstadisticasNIT(BaseModel):
     nit: str
     quantity_folder: int
     quantity_files: int
 
+
 class ConsultaIARequest(BaseModel):
     pregunta: str
     modelo: str = "gpt-4"
+
 
 # Función helper para conectar a S3
 def get_s3_client():
@@ -80,6 +85,7 @@ def get_s3_client():
         raise HTTPException(
             status_code=500, detail=f"Error al conectar a AWS: {str(e)}"
         )
+
 
 # Función para limpiar y preprocesar texto
 def limpiar_texto(texto: str) -> str:
@@ -104,6 +110,7 @@ def limpiar_texto(texto: str) -> str:
             lineas_filtradas.append(linea)
 
     return " ".join(lineas_filtradas)
+
 
 # Función mejorada para extraer texto de PDF
 def extraer_texto_mejorado(url: str) -> str:
@@ -185,6 +192,7 @@ def extraer_texto_mejorado(url: str) -> str:
         print(f"ERROR general en extracción mejorada: {str(e)}")
         return ""
 
+
 # Función para dividir texto en chunks semánticos
 def dividir_en_chunks_semanticos(
     texto: str, chunk_size: int = 1000, chunk_overlap: int = 200
@@ -203,6 +211,7 @@ def dividir_en_chunks_semanticos(
 
     return chunks
 
+
 # Función para generar embedding con validación
 def generar_embedding_openai(texto: str) -> Optional[List[float]]:
     if not texto.strip():
@@ -210,8 +219,11 @@ def generar_embedding_openai(texto: str) -> Optional[List[float]]:
 
     try:
         response = openai_client.embeddings.create(
-            input=texto, model="text-embedding-3-small"
+            input=texto, model="text-embedding-3-large"
         )
+        # response = openai_client.embeddings.create(
+        #     input=texto, model="text-embedding-3-small"
+        # )
         embedding = response.data[0].embedding
 
         # Validar el embedding
@@ -220,12 +232,12 @@ def generar_embedding_openai(texto: str) -> Optional[List[float]]:
             print(f"Advertencia: embedding con norma muy baja: {norma}")
             return None
 
-        print(f"Embedding generado: dimensión {len(embedding)}, norma {norma:.4f}")
         return embedding
 
     except Exception as e:
         print(f"Error al generar embedding: {str(e)}")
         return None
+
 
 # API MEJORADA: Guarda PDFs con chunks semánticos y embeddings
 @router.get("/scanear_archivos/", response_model=RespuestaExito)
@@ -320,6 +332,7 @@ async def importar_y_guardar_archivos_mejorado(
                     )
                     db.add(archivo_db)
                     db.flush()  # Para obtener el ID
+                    print(f"Archivo: {archivo_db.id} creado")
                 except IntegrityError:
                     db.rollback()
                     print(f"Duplicado: {key}")
@@ -348,6 +361,11 @@ async def importar_y_guardar_archivos_mejorado(
                             numero_chunk=i + 1,
                             embedding=embedding,
                         )
+
+                        print(
+                            f"Chunk: {i + 1} genrado para el archivo: {archivo_db.id} creado"
+                        )
+
                         db.add(chunk_db)
                         chunks_guardados += 1
 
@@ -382,6 +400,7 @@ async def importar_y_guardar_archivos_mejorado(
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
+
 
 # API MEJORADA: Responde pregunta usando chunks semánticos y reranking
 @router.post("/responder-pregunta/", response_model=RespuestaLLM)
@@ -511,7 +530,7 @@ def responder_pregunta_mejorado(
     # Enviar al LLM con contexto mejorado
     try:
         completion = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {
                     "role": "system",
@@ -551,6 +570,7 @@ def responder_pregunta_mejorado(
         distancia=distancia_promedio,
         chunks_utilizados=len(chunks_contexto),
     )
+
 
 # TERCERA API: Genera un archivo Excel con estadísticas por NIT
 @router.get("/estadisticas-archivos/")
@@ -640,6 +660,7 @@ def obtener_estadisticas_archivos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
 
+
 # TERCERA API: Genera un archivo Excel con estadísticas por NIT
 @router.post("/consultas_ia/")
 async def consulta_ia(request: ConsultaIARequest):
@@ -655,19 +676,16 @@ async def consulta_ia(request: ConsultaIARequest):
             model=request.modelo,
             messages=[
                 {"role": "system", "content": system_context},
-                {"role": "user", "content": request.pregunta}
+                {"role": "user", "content": request.pregunta},
             ],
             temperature=0.7,
-            max_tokens=1500
+            max_tokens=1500,
         )
-        
+
         return {
             "respuesta": response.choices[0].message.content,
-            "modelo_utilizado": response.model
+            "modelo_utilizado": response.model,
         }
-        
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error en la consulta: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error en la consulta: {str(e)}")

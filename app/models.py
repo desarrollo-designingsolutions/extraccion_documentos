@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey # type: ignore
+from sqlalchemy.orm import relationship # type: ignore
+from sqlalchemy.sql import func # type: ignore
+from pgvector.sqlalchemy import Vector # type: ignore
 from database import Base
 
 class ArchivoS3(Base):
@@ -13,7 +13,6 @@ class ArchivoS3(Base):
     tamaño = Column(BigInteger, nullable=False)
     url_presignada = Column(String, nullable=False)
     texto_extraido = Column(Text, nullable=True)
-    embedding = Column(Vector(1536), nullable=True)  # 1536 para OpenAI
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relación con chunks
@@ -26,7 +25,7 @@ class ChunkArchivo(Base):
     archivo_s3_id = Column(Integer, ForeignKey('archivos_s3.id'))
     contenido = Column(Text, nullable=False)
     numero_chunk = Column(Integer, nullable=False)
-    embedding = Column(Vector(1536))  # 1536 para OpenAI embeddings
+    embedding = Column(Vector(3072))
     
     # Relación
     archivo_s3 = relationship("ArchivoS3", back_populates="chunks")
