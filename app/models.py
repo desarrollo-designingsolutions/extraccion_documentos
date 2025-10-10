@@ -26,6 +26,7 @@ class ChunkArchivo(Base):
     contenido = Column(Text, nullable=False)
     numero_chunk = Column(Integer, nullable=False)
     embedding = Column(Vector(3072))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relación
     archivo_s3 = relationship("ArchivoS3", back_populates="chunks")

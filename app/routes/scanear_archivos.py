@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query # type: ignore
-from sqlalchemy.orm import Session # type: ignore
-from sqlalchemy.exc import IntegrityError # type: ignore
-from botocore.exceptions import ClientError # type: ignore
+from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore
+from sqlalchemy.orm import Session  # type: ignore
+from sqlalchemy.exc import IntegrityError  # type: ignore
+from botocore.exceptions import ClientError  # type: ignore
 from database import get_db
 from models import ArchivoS3, ChunkArchivo
 from .schemas import RespuestaExito
-from .helpers import (
+from utils.helpers import (
     get_s3_client,
     extraer_texto_mejorado,
     dividir_en_chunks_semanticos,
@@ -15,7 +15,7 @@ import os
 
 router = APIRouter()
 
-# API MEJORADA: Guarda PDFs con chunks semánticos y embeddings
+
 @router.get("/scanear_archivos/", response_model=RespuestaExito)
 async def importar_y_guardar_archivos_mejorado(
     prefix: str = Query(
@@ -24,6 +24,7 @@ async def importar_y_guardar_archivos_mejorado(
     chunk_size: int = Query(
         1000, description="Tamaño de chunks para división semántica"
     ),
+    max_keys: int = Query(3),
     chunk_overlap: int = Query(200, description="Solapamiento entre chunks"),
     db: Session = Depends(get_db),
 ):
@@ -37,7 +38,9 @@ async def importar_y_guardar_archivos_mejorado(
     s3 = get_s3_client()
 
     try:
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=3)
+        response = s3.list_objects_v2(
+            Bucket=bucket_name, Prefix=prefix, MaxKeys=max_keys
+        )
         objetos = response.get("Contents", [])
 
         total_guardados = 0
@@ -61,8 +64,6 @@ async def importar_y_guardar_archivos_mejorado(
 
                     if chunks_existentes > 0:
                         continue
-                    else:
-                        print("PDF existe pero sin chunks, reprocesando...")
 
                 nit_parts = key.split("/")
                 nit = nit_parts[0] if nit_parts else key
@@ -88,9 +89,7 @@ async def importar_y_guardar_archivos_mejorado(
                 chunks = dividir_en_chunks_semanticos(
                     texto_pdf, chunk_size=chunk_size, chunk_overlap=chunk_overlap
                 )
-
                 if not chunks:
-                    print(f"Advertencia: No se pudieron generar chunks para {key}")
                     continue
 
                 # Guardar archivo principal
@@ -100,7 +99,7 @@ async def importar_y_guardar_archivos_mejorado(
                         nit=nit,
                         tamaño=obj["Size"],
                         url_presignada=url_presignada,
-                        texto_extraido=texto_pdf
+                        texto_extraido=texto_pdf,
                     )
                     db.add(archivo_db)
                     db.flush()  # Para obtener el ID
@@ -108,11 +107,14 @@ async def importar_y_guardar_archivos_mejorado(
                     print(f"Archivo: {archivo_db.id} creado")
                 except IntegrityError:
                     db.rollback()
-                    print(f"Duplicado: {key}")
                     continue
                 except Exception as e:
                     db.rollback()
                     continue
+
+                print(
+                    f"Cantidad de chucks generados: {len(chunks)} para el archivo: {archivo_db.id}"
+                )
 
                 # Procesar y guardar chunks
                 chunks_guardados = 0
@@ -133,10 +135,6 @@ async def importar_y_guardar_archivos_mejorado(
                             contenido=chunk,
                             numero_chunk=i + 1,
                             embedding=embedding,
-                        )
-
-                        print(
-                            f"Chunk: {i + 1} generado para el archivo: {archivo_db.id} creado"
                         )
 
                         db.add(chunk_db)
