@@ -16,3 +16,7 @@ class PreguntaInput(BaseModel):
     id: int
     pregunta: str
     score_threshold: float = 0.3
+
+class DescomprimirArchivos(BaseModel):
+    data: str
+    nits: List[str]
