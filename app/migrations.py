@@ -9,14 +9,14 @@ def run_migrations():
 
     inspector = inspect(engine)
 
-    # Verificar y crear tabla archivos_s3
-    tabla_archivos_existe = inspector.has_table("archivos_s3")
-    tabla_chunks_existe = inspector.has_table("chunks_archivo")
+    # Verificar y crear tabla files
+    tabla_archivos_existe   = inspector.has_table("files")
+    tabla_chunks_existe     = inspector.has_table("files_chunks")
 
     if not tabla_archivos_existe:
         Base.metadata.create_all(bind=engine)
 
-    # Verificar y crear tabla chunks_archivo
+    # Verificar y crear tabla files_chunks
     if not tabla_chunks_existe:
         Base.metadata.create_all(bind=engine)
 

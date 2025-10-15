@@ -1,0 +1,70 @@
+from fastapi import APIRouter, HTTPException, Depends  # type: ignore
+from sqlalchemy.orm import Session  # type: ignore
+from typing import Optional
+from database import get_db
+from models import Files
+
+router = APIRouter()
+
+def extract_invoice_number(file_name: str) -> Optional[str]:
+    """
+    Extrae el invoice_number de un path como:
+    '800033723/800033723/800033723-FEBQ170778.pdf'
+
+    Regla: el NIT antes del '-' debe coincidir con el primer nivel.
+    Retorna el invoice_number o None si no es válido.
+    """
+    try:
+        parts = file_name.split("/")  # dividir en niveles
+        if not parts:
+            return None
+
+        nit_base = parts[0]  # primer nivel siempre es el NIT
+        invoice_number = None
+
+        # Revisar segundo y tercer nivel
+        for i in range(1, min(3, len(parts))):
+            if "-" in parts[i]:
+                segment = parts[i].replace(".pdf", "")
+                nit_candidate, invoice_candidate = segment.split("-", 1)
+                if nit_candidate == nit_base:  # validar coincidencia
+                    invoice_number = invoice_candidate
+                    break
+
+        # Si no se encontró en niveles, revisar archivo final
+        if not invoice_number and "-" in parts[-1]:
+            filename = parts[-1].replace(".pdf", "")
+            nit_candidate, invoice_candidate = filename.split("-", 1)
+            if nit_candidate == nit_base:  # validar coincidencia
+                invoice_number = invoice_candidate
+
+        return invoice_number
+    except Exception:
+        return None
+
+
+@router.post("/search_invoice_number/")
+def search_invoice_number(db: Session = Depends(get_db)):
+    try:
+        files = db.query(Files).filter(Files.invoice_number == None).all()
+
+        results = []
+        for f in files:
+            invoice_number = extract_invoice_number(f.name)
+            if invoice_number:
+                f.invoice_number = invoice_number
+                db.commit()
+
+            results.append({
+                "id": f.id,
+                "name": f.name,
+                "invoice_number": invoice_number
+            })
+
+        return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado: {str(e)}"
+        )

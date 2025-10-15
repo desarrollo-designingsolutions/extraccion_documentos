@@ -4,29 +4,30 @@ from sqlalchemy.sql import func # type: ignore
 from pgvector.sqlalchemy import Vector # type: ignore
 from database import Base
 
-class ArchivoS3(Base):
-    __tablename__ = "archivos_s3"
+class Files(Base):
+    __tablename__ = "files"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, index=True, unique=True, nullable=False)
+    name = Column(String, index=True, unique=True, nullable=False)
     nit = Column(String, index=True, nullable=False)
-    tamaño = Column(BigInteger, nullable=False)
-    url_presignada = Column(String, nullable=False)
-    texto_extraido = Column(Text, nullable=True)
+    invoice_number = Column(String, nullable=True)
+    size = Column(BigInteger, nullable=False)
+    url_preassigned = Column(String, nullable=False)
+    text_extracted = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relación con chunks
-    chunks = relationship("ChunkArchivo", back_populates="archivo_s3", cascade="all, delete-orphan")
+    chunks = relationship("FilesChunks", back_populates="archivo_s3", cascade="all, delete-orphan")
 
-class ChunkArchivo(Base):
-    __tablename__ = "chunks_archivo"
+class FilesChunks(Base):
+    __tablename__ = "files_chunks"
     
     id = Column(Integer, primary_key=True, index=True)
-    archivo_s3_id = Column(Integer, ForeignKey('archivos_s3.id'))
-    contenido = Column(Text, nullable=False)
-    numero_chunk = Column(Integer, nullable=False)
+    files_id = Column(Integer, ForeignKey('files.id'))
+    content = Column(Text, nullable=False)
+    chunk_number = Column(Integer, nullable=False)
     embedding = Column(Vector(3072))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relación
-    archivo_s3 = relationship("ArchivoS3", back_populates="chunks")
+    archivo_s3 = relationship("Files", back_populates="chunks")

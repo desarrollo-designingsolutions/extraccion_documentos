@@ -35,23 +35,23 @@ def responder_pregunta_mejorado(
     query_debug = text(
         """
         SELECT COUNT(*) as total 
-        FROM chunks_archivo 
-        WHERE archivo_s3_id = :id
+        FROM files_chunks 
+        WHERE files_id = :id
         """
     )
     count = db.execute(query_debug, {"id": input_data.id}).scalar()
 
     if count == 0:
         # Chequea si el archivo principal existe
-        query_archivo = text("SELECT id FROM archivos_s3 WHERE id = :id")
+        query_archivo = text("SELECT id FROM files WHERE id = :id")
         archivo_exists = db.execute(query_archivo, {"id": input_data.id}).fetchone()
 
     # Buscar los chunks más relevantes usando pgvector
     query = text(
         """
         SELECT ca.id, ca.contenido, ca.embedding <=> CAST(:query_emb AS vector) AS distancia
-        FROM chunks_archivo ca
-        WHERE ca.archivo_s3_id = :id
+        FROM files_chunks ca
+        WHERE ca.files_id = :id
         ORDER BY distancia ASC
         LIMIT 20
     """

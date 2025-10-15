@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session  # type: ignore
 from sqlalchemy.exc import IntegrityError  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
 from database import get_db
-from models import ArchivoS3, ChunkArchivo
+from models import Files, FilesChunks
 from .schemas import RespuestaExito
 from utils.helpers import (
     get_s3_client,
@@ -52,13 +52,13 @@ async def importar_y_guardar_archivos_mejorado(
 
                 # Verificar si ya existe
                 archivo_existente = (
-                    db.query(ArchivoS3).filter(ArchivoS3.nombre == key).first()
+                    db.query(Files).filter(Files.name == key).first()
                 )
                 if archivo_existente:
                     # Verificar si ya tiene chunks
                     chunks_existentes = (
-                        db.query(ChunkArchivo)
-                        .filter(ChunkArchivo.archivo_s3_id == archivo_existente.id)
+                        db.query(FilesChunks)
+                        .filter(FilesChunks.files_id == archivo_existente.id)
                         .count()
                     )
 
@@ -94,12 +94,12 @@ async def importar_y_guardar_archivos_mejorado(
 
                 # Guardar archivo principal
                 try:
-                    archivo_db = ArchivoS3(
-                        nombre=key,
+                    archivo_db = Files(
+                        name=key,
                         nit=nit,
-                        tamaño=obj["Size"],
-                        url_presignada=url_presignada,
-                        texto_extraido=texto_pdf,
+                        size=obj["Size"],
+                        url_preassigned=url_presignada,
+                        text_extracted=texto_pdf,
                     )
                     db.add(archivo_db)
                     db.flush()  # Para obtener el ID
@@ -130,10 +130,10 @@ async def importar_y_guardar_archivos_mejorado(
                         continue
 
                     try:
-                        chunk_db = ChunkArchivo(
-                            archivo_s3_id=archivo_db.id,
-                            contenido=chunk,
-                            numero_chunk=i + 1,
+                        chunk_db = FilesChunks(
+                            files_id=archivo_db.id,
+                            content=chunk,
+                            chunk_number=i + 1,
                             embedding=embedding,
                         )
 
