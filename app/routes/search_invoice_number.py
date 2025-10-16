@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends  # type: ignore
 from sqlalchemy.orm import Session  # type: ignore
 from typing import Optional
 from database import get_db
-from models import Files
+from models import Files, InvoiceAudits
 
 router = APIRouter()
 
@@ -49,19 +49,31 @@ def search_invoice_number(db: Session = Depends(get_db)):
         files = db.query(Files).filter(Files.invoice_number == None).all()
 
         results = []
+        exists = None
         for f in files:
             invoice_number = extract_invoice_number(f.name)
+
             if invoice_number:
-                f.invoice_number = invoice_number
-                db.commit()
+                # 👇 Validar existencia en InvoiceAudits
+                exists = db.query(InvoiceAudits).filter(
+                    InvoiceAudits.invoice_number == invoice_number
+                ).first()
+
+                if exists:
+                    f.invoice_number = invoice_number
+                    db.commit()
+                    db.refresh(f)
 
             results.append({
                 "id": f.id,
                 "name": f.name,
-                "invoice_number": invoice_number
+                "invoice_number": f.invoice_number
             })
 
-        return results
+        return {
+            "results": results,
+            "exists": exists
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(

@@ -19,6 +19,7 @@ app.include_router(api_router, prefix=prefix)
 def root():
     return {"mensaje": "API de AWS S3 corriendo."}
 
+
 # Ejecutar con: uvicorn main:app --reload
 if __name__ == "__main__":
     import uvicorn

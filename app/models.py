@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey # type: ignore
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey, Numeric # type: ignore
 from sqlalchemy.orm import relationship # type: ignore
 from sqlalchemy.sql import func # type: ignore
 from pgvector.sqlalchemy import Vector # type: ignore
@@ -31,3 +31,23 @@ class FilesChunks(Base):
     
     # Relación
     archivo_s3 = relationship("Files", back_populates="chunks")
+
+class InvoiceAudits(Base):
+    __tablename__ = "invoice_audits"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    company_id = Column(Integer, nullable=True)
+    third_id = Column(Integer, nullable=True)
+    invoice_number = Column(String, nullable=True)
+    total_value = Column(Numeric(15, 2), nullable=True)
+    origin = Column(String, nullable=True)
+    expedition_date = Column(DateTime(timezone=True), nullable=True)
+    date_entry = Column(DateTime(timezone=True), nullable=True)
+    date_departure = Column(DateTime(timezone=True), nullable=True)
+    modality = Column(String, nullable=True)
+    regimen = Column(String, nullable=True)
+    coverage = Column(String, nullable=True)
+    contract_number = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)

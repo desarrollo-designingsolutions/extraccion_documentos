@@ -1,25 +1,16 @@
-from sqlalchemy import inspect, text # type: ignore
+from sqlalchemy import inspect, text
 from database import engine, Base
 
 def run_migrations():
-    # Habilitar pgvector (solo una vez)
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.commit()
 
     inspector = inspect(engine)
+    tablas_existentes = inspector.get_table_names()
 
-    # Verificar y crear tabla files
-    tabla_archivos_existe   = inspector.has_table("files")
-    tabla_chunks_existe     = inspector.has_table("files_chunks")
-
-    if not tabla_archivos_existe:
+    if not tablas_existentes:
         Base.metadata.create_all(bind=engine)
-
-    # Verificar y crear tabla files_chunks
-    if not tabla_chunks_existe:
-        Base.metadata.create_all(bind=engine)
-
 
 if __name__ == "__main__":
     print("🚀 Iniciando migraciones de base de datos...")
