@@ -9,6 +9,7 @@ from utils.helpers import (
     generar_embedding_openai,
 )
 import os
+import json
 
 router = APIRouter()
 
@@ -57,7 +58,6 @@ def responder_pregunta_mejorado(
         """
     )
 
-
     results = db.execute(
         query, {"query_emb": embedding_pregunta, "id": input_data.id}
     ).fetchall()
@@ -72,7 +72,7 @@ def responder_pregunta_mejorado(
 
     # Aplicar reranking con cross-encoder
     pares_reranking = [
-        [input_data.pregunta, chunk["contenido"]] for chunk in chunks_candidatos
+        [input_data.pregunta, chunk["content"]] for chunk in chunks_candidatos
     ]
     scores_reranking = reranker.predict(pares_reranking)
 
@@ -118,7 +118,7 @@ def responder_pregunta_mejorado(
     # Construir contexto para el LLM
     contexto = "\n\n".join(
         [
-            f"[Fragmento {i+1}]: {chunk['contenido']}"
+            f"[Fragmento {i+1}]: {chunk['content']}"
             for i, chunk in enumerate(chunks_contexto)
         ]
     )
@@ -134,89 +134,232 @@ def responder_pregunta_mejorado(
     )
 
     try:
+        # Primero definimos el system content como string constante
+        system_content = """
+        PRINCIPIOS
+        1) Usa EXCLUSIVAMENTE el texto en CONTEXTO DEL DOCUMENTO (procede de búsqueda semántica/embeddings).
+        2) El CONTEXTO puede tener fragmentos parciales, duplicados o contradicciones y viene separado con delimitadores "----- DOC n -----".
+        3) NO inventes. Si un dato no aparece con claridad, déjalo vacío ("") o no incluyas la categoría.
+        4) SALIDA = SOLO un objeto JSON VÁLIDO con el esquema, claves y orden exactos que se definen abajo. Sin texto extra, sin Markdown, sin comentarios.
+
+        ESQUEMA Y ORDEN DE SALIDA (inmutable)
+        {
+        "prestacion_servicios_de_salud": [],
+        "documentos_administrativos": [],
+        "documentos_contractuales": [],
+        "otros": [],
+        "datos_prestacion_servicios": {
+            "nombre_paciente": "",
+            "tipo_documento": "",
+            "numero_documento": "",
+            "numero_factura": "",
+            "fecha_expedicion_factura": "",
+            "emisor_factura": "",
+            "pagador": "",
+            "autorizacion": []
+        },
+        "resumen": ""
+        }
+
+        OBJETIVO
+        Clasificar los tipos documentales presentes y extraer datos clave. Si el usuario pide un resumen, escribirlo brevemente. Si no hay información suficiente, deja campos vacíos.
+
+        TIPOS Y LITERALES PERMITIDOS
+        1) "prestacion_servicios_de_salud"  (agrega SOLO los literales exactos detectados)
+        - "Factura de servicios médicos"
+            Indicadores: factura, cta de cobro, nro/número de factura, prefijo+consecutivo.
+        - "Autorizaciones"
+            Indicadores: autorización, nro/código/radicado de autorización.
+        - "Historia clínica"
+            Indicadores: historia clínica, epicrisis, evolución, nota de ingreso/egreso, enfermería.
+        - "Evidencia de entrega"
+            Indicadores: exámenes/resultados (laboratorio, imagenología, rx, tac, rm, ecografía), reportes de consulta/procedimiento, descripción quirúrgica.
+
+        2) "documentos_administrativos"
+        - "Recibos de pago"
+        - "Certificados Médicos"
+        - "Constancia de Remisión"
+        - "Pre autorización"
+
+        3) "documentos_contractuales"
+        - "Contrato"
+        - "Otro si"
+        - "Tarifario"
+        - "Cotización"
+
+        4) "otros"
+        - Para documentos válidos no cubiertos arriba.
+        - Incluir como mínimo:
+            - "Correos electrónicos" si hay cabeceras o contenido de emails.
+            - "Acta de conciliación" cuando aparezca (el esquema no tiene grupo propio de conciliación; por eso va aquí).
+
+        REGLAS DE DEDUCCIÓN Y DESEMPATE (por ruido de RAG)
+        - Trata cada "----- DOC n -----" como fuente independiente.
+        - Ante duplicados o contradicciones, prioriza:
+        (1) fragmentos con rótulos claros ("Factura No.", "Fecha de expedición", "NÚMERO DE AUTORIZACIÓN"),
+        (2) presencia de razón social/sellos/NIT del emisor,
+        (3) mayor especificidad frente a términos genéricos.
+        - Ignora boilerplate (avisos legales, pies de página) para la extracción.
+
+        EXTRACCIONES → llenar "datos_prestacion_servicios"
+        De existir, completar; si no, dejar "" (o [] para listas).
+        - "nombre_paciente": etiquetas "Paciente", "Usuario", "Afiliado", "Nombre del paciente".
+        - "tipo_documento": valores tal como aparezcan (CC, TI, CE, PA, RC, etc.).
+        - "numero_documento": solo dígitos (quitar puntos/espacios).
+        - "numero_factura": alfanumérico con guiones/prefijos ([A-Z0-9\-/.]+). Conservar el literal detectado.
+        - "fecha_expedicion_factura": normalizar a YYYY-MM-DD cuando sea inequívoco a partir de DD/MM/YYYY, YYYY-MM-DD o DD-MM-YYYY; si hay ambigüedad, dejar "".
+        - "emisor_factura": IPS/Prestador emisor (razón social más explícita o NIT rotulado).
+        - "pagador": EPS/Entidad pagadora (p. ej., campo "Pagador", "Asegurador", "EPS").
+        - "autorizacion": lista de números de autorización detectados (sin duplicados). Patrones típicos:
+        (?i)(autorizaci[oó]n|c[oó]digo de autorizaci[oó]n|radicado)\s*[:#\-]*\s*([A-Z0-9\-]+)
+
+        EVIDENCIA DE "TRES CORREOS" (autorizaciones)
+        - Si se evidencia el envío de tres correos relacionados a la solicitud/gestión de autorización (tres cabeceras o hilos distintos con asunto/tema de autorización), incluir "Correos electrónicos" en "otros".
+        - No infieras si no hay evidencia clara de tres correos distintos.
+
+        RESUMEN CLÍNICO → "resumen"
+        - Solo si el usuario lo solicita o el flujo lo requiere.
+        - Breve (máx. 5-6 líneas) y derivado de Historia clínica o Evidencia de entrega del CONTEXTO.
+        - Si no hay base clínica suficiente, dejar "".
+
+        VALIDACIÓN DE SALIDA
+        1) Devuelve SOLO el JSON del esquema, con las claves y orden exactos.
+        2) No agregues ni renombres claves. No repitas categorías. Sin comentarios ni Markdown.
+        3) Cuando algo no exista en CONTEXTO, deja vacío ("") o [] según corresponda.
+
+        PROCEDIMIENTO INTERNO (no lo expliques; solo aplícalo)
+        1) Separar y leer por DOC, ignorar boilerplate.
+        2) Detectar categorías con las palabras clave (insensible a mayúsculas/tildes).
+        3) Extraer campos con los patrones y normalizaciones indicados.
+        4) Resolver contradicciones con las reglas de desempate.
+        5) Deduplicar listas y ordenar alfabéticamente cuando aplique (no obligatorio).
+        6) Rellenar JSON exacto en el orden definido.
+
+        SINÓNIMOS FRECUENTES (ayuda a la detección)
+        - Factura: "cuenta de cobro", "cta de cobro", "invoice".
+        - Autorización: "código autorización", "radicado", "autoriz.".
+        - Historia clínica: "epicrisis", "evolución", "nota médica". 
+        - Evidencia de entrega: "resultado", "reporte", "descripción quirúrgica", "imagenología", "laboratorio".
+        - Recibo de pago: "comprobante", "soporte de pago", "transferencia".
+        - Remisión: "contrarreferencia", "remisión".
+        """
+
+        # Luego creamos el user content sin usar f-strings complejos
+        user_content = f"""
+        {contexto}   (delimitado por "----- DOC n -----" entre fragmentos)
+
+        PREGUNTA:
+        {input_data.pregunta}
+
+        PARÁMETROS RECOMENDADOS (fuera del prompt, en tu cliente)
+        - temperature: 0
+        - top_p: 1
+        - max_tokens: suficiente para cubrir el JSON
+        - Si tu proveedor lo soporta: usa validación JSON/JSON schema o function/tool-calling para fijar el formato.
+
+        EJEMPLOS (few-shots compactos dentro del system)
+        --------------------------------------------------------------------------------
+        [Ejemplo 1 - Factura + Autorización + Correos]
+        CONTEXTO DEL DOCUMENTO (fragmentos):
+        ----- DOC 1 -----
+        Factura No.: ABC-123
+        Fecha expedición: 14/08/2025
+        Prestador (Emisor): Clínica San José S.A.S. NIT 900111222
+        Pagador: Coosalud EPS
+        Paciente: Juan Pérez
+        CC 1.234.567.890
+
+        ----- DOC 2 -----
+        NÚMERO DE AUTORIZACIÓN: A-98765
+
+        ----- DOC 3 -----
+        De: autorizaciones@ips.com
+        Asunto: Solicitud de Autorización paciente Juan Pérez
+        Fecha: 2025-08-10
+
+        ----- DOC 4 -----
+        De: autorizaciones@ips.com
+        Asunto: Seguimiento Autorización A-98765
+        Fecha: 2025-08-11
+
+        ----- DOC 5 -----
+        De: autorizaciones@ips.com
+        Asunto: Escalamiento Autorización A-98765
+        Fecha: 2025-08-12
+
+        PREGUNTA: Clasificar y extraer datos.
+
+        SALIDA ESPERADA (solo JSON):
+        {{
+        "prestacion_servicios_de_salud": [
+            "Factura de servicios médicos",
+            "Autorizaciones"
+        ],
+        "documentos_administrativos": [],
+        "documentos_contractuales": [],
+        "otros": [
+            "Correos electrónicos"
+        ],
+        "datos_prestacion_servicios": {{
+            "nombre_paciente": "Juan Pérez",
+            "tipo_documento": "CC",
+            "numero_documento": "1234567890",
+            "numero_factura": "ABC-123",
+            "fecha_expedicion_factura": "2025-08-14",
+            "emisor_factura": "Clínica San José S.A.S. (NIT 900111222)",
+            "pagador": "Coosalud EPS",
+            "autorizacion": ["A-98765"]
+        }},
+        "resumen": ""
+        }}
+
+        [Ejemplo 2 - Administrativos + Acta de conciliación, sin datos clínicos]
+        CONTEXTO DEL DOCUMENTO:
+        ----- DOC 1 -----
+        Recibo de pago transferencia #77889 por servicios prestados agosto 2025.
+        ----- DOC 2 -----
+        Certificado Médico laboral: apto.
+        ----- DOC 3 -----
+        Acta de conciliación entre IPS X y EPS Y, acuerdos de pago.
+
+        PREGUNTA: Solo clasificación.
+
+        SALIDA ESPERADA (solo JSON):
+        {{
+            "prestacion_servicios_de_salud": [],
+            "documentos_administrativos": [
+                "Recibos de pago",
+                "Certificados Médicos"
+            ],
+            "documentos_contractuales": [],
+            "otros": [
+                "Acta de conciliación"
+            ],
+            "datos_prestacion_servicios": {{
+                "nombre_paciente": "",
+                "tipo_documento": "",
+                "numero_documento": "",
+                "numero_factura": "",
+                "fecha_expedicion_factura": "",
+                "emisor_factura": "",
+                "pagador": "",
+                "autorizacion": []
+            }},
+            "resumen": ""
+        }}
+        """
         completion = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
-                    "content": """
-                        Eres un asistente especializado en análisis de documentos.
-                        El asistente especializado en análisis de documentos, debe tener la capacidad de procesar grandes volúmenes de información, identificar patrones y contenido relevante dentro de los documentos de servicios médicos, y ofrecer respuestas rápidas y precisas que faciliten la gestión de cuentas médicas en Colombia, mejorando la eficiencia y la precisión en la administración de los servicios de salud. 
-
-                       Tu tarea es responder preguntas del usuario basándote ÚNICAMENTE en el contexto proporcionado.
-
-                        Tipos de preguntas que puedes recibir:
-                        1. Clasificación del documento:
-                        - "Prestación de servicios de salud": documentos que detallan información de un paciente y los procedimientos médicos realizados.
-                        - "Documento administrativo": documentos dirigidos a Coosalud (ej. contratos, actas de conciliación, cartas, comunicaciones administrativas).
-                        - Si no hay información suficiente, responde: "No se puede determinar".
-                        - En este caso, responde SOLO con la categoría.
-
-                        - "Prestación de servicios de salud":
-                        Factura de servicios médicos: Detalla los servicios prestados y los costos asociados a un paciente, que deben ser aprobados y validados por la EPS correspondiente.
-                        Autorizaciones: Solicitudes previas de aprobación para ciertos procedimientos o tratamientos médicos. Se valida como autorización el trámite del envió de los tres correos por parte de la IPS
-                        Historia clínica: Documento que recoge el registro detallado de la atención médica prestada al paciente.
-                        Evidencia de entrega: Resultados de análisis, pruebas médicas solicitadas como parte del tratamiento, así como, reportes de consultas, procedentitos y descripciones quirúrgicas.
-                        - "Documento de conciliación":
-                        Acta de conciliación: Es un documento formal que recoge los acuerdos alcanzados entre IPS y EPS, normalmente relacionadas con la prestación de servicios de salud. Esta acta se elabora tras un proceso de negociación o conciliación, donde se buscan soluciones mutuas a los desacuerdos.
-
-                        - "Documento administrativo":
-                        Recibos de pago: Comprobantes que validan los pagos realizados por los servicios prestados. 
-                        Certificados Médicos: Soporte para justificar la condición de salud del paciente ante EPS, empleadores o entidades gubernamentales.
-                        Constancia de Remisión: Documento que evidencia la remisión de un paciente de una IPS a otra o a un especialista, indicando el motivo y el tratamiento recomendado.
-                        Pre autorización:  Documento que autoriza el uso o la dispensación de ciertos servicios, medicamentos o tratamientos no cubiertos automáticamente por el plan de salud.
-
-                        - "Documento contractual":
-                        Contrato: Es el acuerdo formal entre las EPS (Entidades Promotoras de Salud) y las IPS (Instituciones Prestadoras de Salud) o los prestadores individuales de servicios médicos, donde se establecen las condiciones, términos, tarifas y responsabilidades sobre la prestación de servicios de salud.
-                        Otro si: Es un documento adicional o anexo a un contrato principal (como el contrato de prestación de servicios de salud) que modifica, amplía o aclara ciertos términos, condiciones o acuerdos establecidos inicialmente.
-                        Tarifario: Es un documento que contiene la lista oficial de tarifas que las EPS y las IPS deben seguir para facturar los servicios médicos prestados. Establece los precios estándar por cada tipo de servicio, tratamiento o procedimiento.
-                        Cotización: Es una estimación de los costos de un servicio o conjunto de servicios médicos proporcionada por un prestador de salud a un paciente o a una EPS. Generalmente, la cotización especifica los precios por procedimiento, tratamiento o consulta.
-
-
-                        El asistente debe identificar si existe o no dentro de los soportes las categorías de los siguientes documentos: 
-                        •	Factura de servicios médicos
-                        •	Autorizaciones
-                        •	Historia clínica
-                        •	Evidencia de entrega
-                        •	Acta de conciliación
-                        •	Documento administrativo
-                        •	Documento contractual
-
-                        Del listado anterior el asistente debe responder en formato JSON si existe o no la categoría documental.
-                        Adicionalmente en la categoría autorizaciones se debe identificar:
-                        •	Si existe un numero de autorización -  Este se debe extraer este número.
-                        •	Si existe evidencia del envío de tres coreos electrónicos solicitando una autorización - se debe reportar que existen los tres correos.
-
-                      2. Extracción de datos:
-                        - Si el usuario pide datos específicos (ej. nombre del paciente, fecha, número de documento), respóndelos únicamente si aparecen en el contexto.
-                        - Si no están, indica claramente: "No se encuentra en el contexto".
-
-                        En las siguientes categorías:
-                        •	Factura: debe extraer el número de factura, usuario (paciente), emisor (quien genera la factura - IPS) y pagador (a quien va dirigida la factura - EPS).
-                        •	Autorización: debe extraer el numero de autorización cuando exista.
-
-                        3. Resúmenes:
-                        - Si el usuario pide un resumen, genera un texto breve y claro con la información más relevante del documento.
-                        
-                        El resumen debe generarse a partir de la información contenida en la Historia Clínica o evidencia del servicio.
-
-                        Reglas generales:
-                        - Nunca inventes información que no esté en el contexto.
-                        - Si no puedes responder algo, dilo explícitamente.
-                        - Ajusta tu respuesta al tipo de pregunta: clasificación, datos específicos o resumen.
-                    """,
+                    "content": system_content
                 },
                 {
-                    "role": "user",
-                    "content": f"""
-                        CONTEXTO DEL DOCUMENTO:
-                        {contexto}
-
-                        PREGUNTA: {input_data.pregunta}
-                    """,
-                },
-            ],
-        )
+                    "role": "user", 
+                    "content": user_content
+                }
+        ])
 
         respuesta_llm = completion.choices[0].message.content.strip()
     except Exception as e:
@@ -228,7 +371,7 @@ def responder_pregunta_mejorado(
     )
 
     return RespuestaLLM(
-        respuesta=respuesta_llm,
+        respuesta=json.loads(respuesta_llm),
         distancia=distancia_promedio,
         chunks_utilizados=len(chunks_contexto),
     )

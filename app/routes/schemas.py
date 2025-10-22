@@ -6,7 +6,7 @@ class RespuestaExito(BaseModel):
     objetos: List[dict]
 
 class RespuestaLLM(BaseModel):
-    respuesta: str
+    respuesta: dict
     distancia: float
     chunks_utilizados: int
 
