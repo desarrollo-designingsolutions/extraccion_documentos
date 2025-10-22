@@ -49,13 +49,14 @@ def responder_pregunta_mejorado(
     # Buscar los chunks más relevantes usando pgvector
     query = text(
         """
-        SELECT ca.id, ca.contenido, ca.embedding <=> CAST(:query_emb AS vector) AS distancia
+        SELECT ca.id, ca.content, ca.embedding <=> CAST(:query_emb AS vector) AS distancia
         FROM files_chunks ca
         WHERE ca.files_id = :id
         ORDER BY distancia ASC
         LIMIT 20
-    """
+        """
     )
+
 
     results = db.execute(
         query, {"query_emb": embedding_pregunta, "id": input_data.id}

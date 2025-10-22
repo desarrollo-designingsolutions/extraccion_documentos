@@ -5,7 +5,9 @@ import fitz # type: ignore
 import pdfplumber # type: ignore
 import boto3 # type: ignore
 import os
-import requests
+import asyncio
+import httpx
+import logging
 from io import BytesIO
 from typing import List, Optional
 from openai import OpenAI # type: ignore
@@ -13,6 +15,12 @@ from botocore.exceptions import NoCredentialsError # type: ignore
 from fastapi import HTTPException # type: ignore
 from langchain_text_splitters import RecursiveCharacterTextSplitter # type: ignore
 from pdf2image import convert_from_bytes # type: ignore
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Cliente de OpenAI
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -59,85 +67,56 @@ def limpiar_texto(texto: str) -> str:
 
     return " ".join(lineas_filtradas)
 
+# ---------------------------
+# Funciones auxiliares sync
+# ---------------------------
+def extraer_con_pymupdf(content: bytes) -> str:
+    doc = fitz.open(stream=content, filetype="pdf")
+    textos = [pagina.get_text() for pagina in doc if pagina.get_text()]
+    return "\n".join(textos)
+
+def extraer_con_pdfplumber(content: bytes) -> str:
+    textos = []
+    with pdfplumber.open(BytesIO(content)) as pdf:
+        for pagina in pdf.pages:
+            if (txt := pagina.extract_text()):
+                textos.append(txt)
+    return "\n".join(textos)
+
+def extraer_con_ocr(content: bytes, lang: str = "spa") -> str:
+    images = convert_from_bytes(content, dpi=200, fmt="RGB")
+    textos = [pytesseract.image_to_string(img, lang=lang, config="--psm 6") for img in images]
+    return "\n".join(textos)
 
 # Función mejorada para extraer texto de PDF
-def extraer_texto_mejorado(url: str) -> str:
+async def extraer_texto_mejorado_async(url: str, lang: str = "spa") -> str:
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        content = resp.content
+
+    # Estrategia 1: PyMuPDF
     try:
-        response = requests.get(url, timeout=60)
-        response.raise_for_status()
-
-        if len(response.content) == 0:
-            print("ERROR: Descarga vacía.")
-            return ""
-
-        texto_completo = ""
-
-        # ESTRATEGIA 1: PyMuPDF (rápido y efectivo para texto nativo)
-        try:
-            doc = fitz.open(stream=response.content, filetype="pdf")
-            for pagina_num, pagina in enumerate(doc):
-                texto_pagina = pagina.get_text()
-                if texto_pagina:
-                    texto_completo += texto_pagina + "\n"
-
-            if texto_completo.strip():
-                return limpiar_texto(texto_completo)
-        except Exception as e:
-            print(f"PyMuPDF falló: {str(e)}")
-            texto_completo = ""
-
-        # ESTRATEGIA 2: pdfplumber (mejor para layouts complejos y tablas)
-        try:
-            with pdfplumber.open(BytesIO(response.content)) as pdf:
-                for pagina_num, pagina in enumerate(pdf.pages):
-                    # Extraer texto principal
-                    texto_pagina = pagina.extract_text()
-                    if texto_pagina:
-                        texto_completo += texto_pagina + "\n"
-
-                    # Intentar extraer y reconstruir tablas
-                    try:
-                        tablas = pagina.extract_tables()
-                        for tabla_num, tabla in enumerate(tablas):
-                            if tabla:
-                                texto_tabla = "| TABLA | "
-                                for fila in tabla:
-                                    fila_limpia = [
-                                        str(celda).replace("\n", " ") if celda else ""
-                                        for celda in fila
-                                    ]
-                                    texto_tabla += " | ".join(fila_limpia) + " | "
-                                texto_completo += texto_tabla + "\n"
-                    except Exception as e_tabla:
-                        print(
-                            f"Error extrayendo tablas página {pagina_num + 1}: {str(e_tabla)}"
-                        )
-
-            if texto_completo.strip():
-                return limpiar_texto(texto_completo)
-        except Exception as e:
-            print(f"pdfplumber falló: {str(e)}")
-            texto_completo = ""
-
-        # ESTRATEGIA 3: OCR como último recurso
-        try:
-            images = convert_from_bytes(response.content, dpi=200, fmt="RGB")
-            for i, image in enumerate(images):
-                ocr_text = pytesseract.image_to_string(image, lang="spa")
-                texto_completo += ocr_text + "\n"
-
-            texto_final = texto_completo.strip()
-            return limpiar_texto(texto_final)
-
-        except Exception as e:
-            print(f"ERROR en OCR: {str(e)}")
-            return ""
-
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR descarga: {str(e)}")
-        return ""
+        texto = await asyncio.to_thread(extraer_con_pymupdf, content)
+        if texto.strip():
+            return texto
     except Exception as e:
-        print(f"ERROR general en extracción mejorada: {str(e)}")
+        logger.warning(f"[PyMuPDF] Falló: {e}")
+
+    # Estrategia 2: pdfplumber
+    try:
+        texto = await asyncio.to_thread(extraer_con_pdfplumber, content)
+        if texto.strip():
+            return texto
+    except Exception as e:
+        logger.warning(f"[pdfplumber] Falló: {e}")
+
+    # Estrategia 3: OCR
+    try:
+        texto = await asyncio.to_thread(extraer_con_ocr, content, lang)
+        return texto
+    except Exception as e:
+        logger.error(f"[OCR] Falló: {e}")
         return ""
 
 
@@ -186,3 +165,19 @@ def generar_embedding_openai(texto: str) -> Optional[List[float]]:
         print(f"Error al generar embedding: {str(e)}")
         return None
 
+
+async def generar_embeddings_async(
+    chunks: List[str], 
+    max_concurrent: int = 5
+) -> List[Optional[List[float]]]:
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async def wrapper(idx: int, chunk: str):
+        async with sem:
+            # logger.info(f"[Embeddings] Iniciando chunk {idx+1}/{len(chunks)}")
+            result = await asyncio.to_thread(generar_embedding_openai, chunk)
+            # logger.info(f"[Embeddings] Finalizado chunk {idx+1}/{len(chunks)}")
+            return result
+
+    tasks = [wrapper(i, chunk) for i, chunk in enumerate(chunks)]
+    return await asyncio.gather(*tasks)
