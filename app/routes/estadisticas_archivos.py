@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query  # type: ignore
-from fastapi.responses import StreamingResponse  # type: ignore
-from botocore.exceptions import ClientError  # type: ignore
-import pandas as pd  # type: ignore
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from botocore.exceptions import ClientError
+import pandas as pd
 from io import BytesIO
 from collections import defaultdict
 from utils.helpers import get_s3_client

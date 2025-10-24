@@ -20,7 +20,7 @@ services:
       - redis_data:/data
 
   app:
-    build: ./app
+    build: ./
     restart: always
     ports:
       - "8002:8000"
@@ -32,7 +32,7 @@ services:
       - ./app:/app
   
   worker:
-    build: ./app
+    build: ./
     restart: always
     env_file:
       - .env

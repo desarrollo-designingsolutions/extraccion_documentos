@@ -1,6 +1,5 @@
-# app/routes/scanear_archivos.py
-import os  # type: ignore
-from fastapi import APIRouter, Body, Depends, HTTPException, Query  # type: ignore
+import os
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from typing import List, Optional
 from jobs.job_scanear import procesar_archivos
 from .schemas import RespuestaExito

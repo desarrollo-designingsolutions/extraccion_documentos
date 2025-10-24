@@ -1,20 +1,20 @@
-import numpy as np # type: ignore
+import numpy as np
 import re
-import pytesseract # type: ignore
-import fitz # type: ignore
-import pdfplumber # type: ignore
-import boto3 # type: ignore
+import pytesseract
+import fitz
+import pdfplumber
+import boto3
 import os
 import asyncio
 import httpx
 import logging
 from io import BytesIO
 from typing import List, Optional
-from openai import OpenAI # type: ignore
-from botocore.exceptions import NoCredentialsError # type: ignore
-from fastapi import HTTPException # type: ignore
-from langchain_text_splitters import RecursiveCharacterTextSplitter # type: ignore
-from pdf2image import convert_from_bytes # type: ignore
+from openai import OpenAI
+from botocore.exceptions import NoCredentialsError
+from fastapi import HTTPException
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pdf2image import convert_from_bytes
 
 logging.basicConfig(
     level=logging.INFO,

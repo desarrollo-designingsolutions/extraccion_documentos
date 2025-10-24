@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends  # type: ignore
-from sqlalchemy.orm import Session  # type: ignore
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 from models import Files, InvoiceAudits

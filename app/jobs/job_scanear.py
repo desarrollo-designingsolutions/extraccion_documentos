@@ -1,4 +1,3 @@
-# app/jobs/job_scanear.py
 import os
 import json
 import logging

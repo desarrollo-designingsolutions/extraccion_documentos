@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copiar requirements primero (para cache de Docker)
-COPY requirements.txt .
+COPY app/requirements.txt .
 
 # Instalar dependencias de Python con verificaciones
 RUN pip install --no-cache-dir --upgrade pip && \

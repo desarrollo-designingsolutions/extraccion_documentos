@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey, Numeric # type: ignore
-from sqlalchemy.orm import relationship # type: ignore
-from sqlalchemy.sql import func # type: ignore
-from pgvector.sqlalchemy import Vector # type: ignore
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey, Numeric
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 from database import Base
 
 class Files(Base):

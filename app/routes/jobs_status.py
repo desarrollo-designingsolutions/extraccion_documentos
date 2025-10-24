@@ -1,4 +1,3 @@
-# app/routes/jobs_status.py
 import json
 import redis
 from fastapi import APIRouter
@@ -7,8 +6,6 @@ import os
 
 
 router = APIRouter()
-
-
 r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 @router.get("/jobs/{job_id}/status")
