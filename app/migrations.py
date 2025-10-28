@@ -1,23 +1,21 @@
-import asyncio
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text # type: ignore
 from database import engine, Base
 
-async def run_migrations():
-    async with engine.connect() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        await conn.commit()
+def run_migrations():
+    # Habilitar pgvector (solo una vez)
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+        conn.commit()
 
-        # Usar run_sync para métodos sync como inspect
-        async def get_tables(conn):
-            return inspect(conn).get_table_names()
+    inspector = inspect(engine)
 
-        tablas_existentes = await conn.run_sync(get_tables)
+    # Verificar y crear tabla files
+    tabla_files_existe = inspector.has_table("files")
 
-        if not tablas_existentes:
-            # create_all es sync, así que usa run_sync
-            await conn.run_sync(Base.metadata.create_all)
+    if not tabla_files_existe:
+        Base.metadata.create_all(bind=engine)
 
 if __name__ == "__main__":
     print("🚀 Iniciando migraciones de base de datos...")
-    asyncio.run(run_migrations())  # Ejecuta async si se llama desde main
+    run_migrations()
     print("🎯 Migraciones completadas!")

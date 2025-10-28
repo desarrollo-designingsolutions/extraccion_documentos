@@ -10,6 +10,8 @@ import asyncio
 from typing import List, Dict, Any
 from redis.asyncio import Redis  # Import corregido
 from openai import AsyncOpenAI  # Para tipado
+import hashlib
+from utils.helpers import validate_parsed_response
 
 router = APIRouter()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -45,7 +47,7 @@ def normalize_distance(d: float) -> float:
     return max(0.0, min(1.0, v))
 
 async def get_cached_embedding(redis: Redis, question: str) -> List[float] | None:
-    cache_key = f"embedding:{hash(question)}"
+    cache_key = f"embedding:{hashlib.sha256(question.encode()).hexdigest()}"
     cached = await redis.get(cache_key)
     if cached:
         return json.loads(cached)
@@ -209,15 +211,15 @@ async def call_llm(request: Request, context: str) -> Dict:
     try:
         completion = await asyncio.wait_for(
             openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Cambiado a modelo más rápido/barato
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.0,
-                max_tokens=800,
+                max_tokens=2000,
             ),
-            timeout=30.0  # Timeout para evitar hangs
+            timeout=30.0
         )
         raw_text = completion.choices[0].message.content.strip()
         return json.loads(raw_text)  # Asume JSON válido; maneja errores abajo
@@ -293,6 +295,10 @@ async def responder_pregunta_mejorado(request: Request, input_data: PreguntaInpu
 
     # Llamada LLM
     parsed = await call_llm(request, contexto)
+    try:
+        parsed = validate_parsed_response(parsed, contexto)
+    except Exception:
+        logger.exception("Error validando respuesta LLM (individual)")
 
     logger.info(f"Procesado en {asyncio.get_event_loop().time() - start_time:.2f}s")
     return RespuestaLLM(

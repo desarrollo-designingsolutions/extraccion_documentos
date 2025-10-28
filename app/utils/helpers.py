@@ -15,6 +15,9 @@ from botocore.exceptions import NoCredentialsError
 from fastapi import HTTPException
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pdf2image import convert_from_bytes
+import hashlib
+from datetime import datetime
+from typing import Tuple
 
 logging.basicConfig(
     level=logging.INFO,
@@ -181,3 +184,114 @@ async def generar_embeddings_async(
 
     tasks = [wrapper(i, chunk) for i, chunk in enumerate(chunks)]
     return await asyncio.gather(*tasks)
+
+
+# ---------------------------
+# Validation helpers for LLM outputs
+# ---------------------------
+def _parse_date_to_iso(date_str: str) -> str:
+    if not date_str or not isinstance(date_str, str):
+        return ""
+    date_str = date_str.strip()
+    # Common patterns: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+    patterns = [r"^(\d{2})/(\d{2})/(\d{4})$", r"^(\d{2})-(\d{2})-(\d{4})$", r"^(\d{4})-(\d{2})-(\d{2})$"]
+    for pat in patterns:
+        m = re.match(pat, date_str)
+        if m:
+            try:
+                if pat.startswith('^(\\d{2})'):
+                    d, mth, y = m.groups()
+                else:
+                    y, mth, d = m.groups()
+                return f"{int(y):04d}-{int(mth):02d}-{int(d):02d}"
+            except Exception:
+                return ""
+    # Fallback: try parsing with datetime
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    return ""
+
+
+def _clean_digits(s: str) -> str:
+    if not s or not isinstance(s, str):
+        return ""
+    return re.sub(r"\D+", "", s)
+
+
+def validate_parsed_response(parsed: dict, context_text: str = "") -> dict:
+    """
+    Validate and normalize the parsed JSON coming from the LLM.
+    - Ensures required keys exist and normalizes number/date fields.
+    - Removes clearly invalid or hallucinated values based on simple heuristics.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+
+    out = parsed.copy()
+
+    # Ensure top-level keys exist
+    for key in ("prestacion_servicios_de_salud", "documentos_administrativos", "documentos_contractuales", "otros", "datos_prestacion_servicios", "resumen"):
+        out.setdefault(key, [] if key != "datos_prestacion_servicios" and key != "resumen" else {})
+
+    datos = out.get("datos_prestacion_servicios") or {}
+    # Normalize nombre_paciente: keep if non-empty and appears in context or has at least two words
+    nombre = datos.get("nombre_paciente", "")
+    if isinstance(nombre, str) and nombre.strip():
+        name_ok = False
+        if nombre.lower() in context_text.lower():
+            name_ok = True
+        elif len([w for w in nombre.split() if w]) >= 2:
+            name_ok = True
+        if not name_ok:
+            datos["nombre_paciente"] = ""
+    else:
+        datos["nombre_paciente"] = ""
+
+    # tipo_documento: leave as-is but ensure string
+    tipo = datos.get("tipo_documento", "")
+    datos["tipo_documento"] = tipo if isinstance(tipo, str) else ""
+
+    # numero_documento: keep only digits, require length >=6 (heuristic)
+    num = _clean_digits(datos.get("numero_documento", ""))
+    if len(num) < 6:
+        datos["numero_documento"] = ""
+    else:
+        datos["numero_documento"] = num
+
+    # numero_factura: allow alphanumeric but strip weird chars
+    nf = datos.get("numero_factura", "")
+    if isinstance(nf, str):
+        datos["numero_factura"] = nf.strip()
+    else:
+        datos["numero_factura"] = ""
+
+    # fecha_expedicion_factura: normalize to YYYY-MM-DD when possible
+    fecha_norm = _parse_date_to_iso(datos.get("fecha_expedicion_factura", ""))
+    datos["fecha_expedicion_factura"] = fecha_norm
+
+    # emisor_factura, pagador keep as strings
+    for fld in ("emisor_factura", "pagador"):
+        v = datos.get(fld, "")
+        datos[fld] = v.strip() if isinstance(v, str) else ""
+
+    # autorizacion: dedupe and keep alnum+hyphen
+    auths = datos.get("autorizacion", []) or []
+    cleaned = []
+    for a in auths:
+        if not isinstance(a, str):
+            continue
+        ca = re.sub(r"[^A-Z0-9\-]", "", a.upper())
+        if ca and ca not in cleaned:
+            cleaned.append(ca)
+    datos["autorizacion"] = cleaned
+
+    out["datos_prestacion_servicios"] = datos
+
+    # resumen: ensure string
+    out["resumen"] = out.get("resumen", "") if isinstance(out.get("resumen", ""), str) else ""
+
+    return out

@@ -1,8 +1,8 @@
 import os
 import json
 import logging
-import redis
-from celery import Celery
+from typing import Dict, Any, List
+from jobs import celery, set_job_state
 from typing import Dict, Any, List
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
@@ -21,12 +21,8 @@ import traceback
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("job_scanear")
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
-BACKEND_URL = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
-
-celery = Celery("jobs", broker=BROKER_URL, backend=BACKEND_URL)
-r = redis.Redis.from_url(REDIS_URL)
+# NOTE: celery and set_job_state are provided by `jobs.celery_app` and re-exported
+# at package level (see app/jobs/celery_app.py and app/jobs/__init__.py)
 
 # DB setup para el worker (usar misma URL que la app)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -35,11 +31,7 @@ if not DATABASE_URL:
 engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine)
 
-def set_job_state(job_id: str, payload: dict):
-    try:
-        r.set(f"job:{job_id}", json.dumps(payload))
-    except Exception as e:
-        logger.error(f"Error al setear estado en Redis para job {job_id}: {e}")
+# set_job_state is imported from jobs and will persist state in Redis if available
 
 @celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
 def procesar_archivos(self, payload: Dict[str, Any]):
@@ -53,13 +45,13 @@ def procesar_archivos(self, payload: Dict[str, Any]):
       - bucket: str
     """
     job_id = self.request.id
-    logger.info(f"[JOB {job_id}] Iniciando tarea")
+    # logger.info(f"[JOB {job_id}] Iniciando tarea")
     set_job_state(job_id, {"status": "queued", "progress": 0})
 
     try:
         asyncio.run(_procesar_archivos_async(job_id, payload))
         set_job_state(job_id, {"status": "completed", "progress": 100})
-        logger.info(f"[JOB {job_id}] Completado correctamente")
+        # logger.info(f"[JOB {job_id}] Completado correctamente")
         return {"status": "completed"}
     except Exception as e:
         tb = traceback.format_exc()
@@ -75,7 +67,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
     concurrency: int = payload.get("concurrency", 5)
     bucket_name: str = payload.get("bucket")
 
-    logger.info(f"[JOB {job_id}] Parámetros: prefixes={prefixes}, chunk_size={chunk_size}, max_keys={max_keys}, chunk_overlap={chunk_overlap}, concurrency={concurrency}, bucket={bucket_name}")
+    # logger.info(f"[JOB {job_id}] Parámetros: prefixes={prefixes}, chunk_size={chunk_size}, max_keys={max_keys}, chunk_overlap={chunk_overlap}, concurrency={concurrency}, bucket={bucket_name}")
     set_job_state(job_id, {"status": "listing", "progress": 1, "message": "Listando objetos en S3"})
 
     s3 = get_s3_client()
@@ -83,7 +75,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
 
     # Listar objetos (mismo comportamiento que tenías)
     for prefix in prefixes:
-        logger.info(f"[JOB {job_id}] Listando prefijo: {prefix}")
+        # logger.info(f"[JOB {job_id}] Listando prefijo: {prefix}")
         try:
             if max_keys:
                 resp = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=max_keys)
@@ -106,7 +98,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
             continue
 
     total = len(objetos)
-    logger.info(f"[JOB {job_id}] Total objetos encontrados: {total}")
+    # logger.info(f"[JOB {job_id}] Total objetos encontrados: {total}")
     if total == 0:
         set_job_state(job_id, {"status": "completed", "progress": 100, "total": 0, "message": "No se encontraron objetos"})
         return
@@ -130,7 +122,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
             return
 
         async with sem:
-            logger.info(f"[JOB {job_id}] Procesando archivo: {key}")
+            # logger.info(f"[JOB {job_id}] Procesando archivo: {key}")
             set_job_state(job_id, {
                 "status": "in_progress",
                 "progress": int((processed / total) * 100) if total else 0,
@@ -141,7 +133,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
 
             # Filtrado por tamaño y extensión
             if size == 0 or not key.lower().endswith(".pdf"):
-                logger.info(f"[JOB {job_id}] Skipping {key} size={size}")
+                # logger.info(f"[JOB {job_id}] Skipping {key} size={size}")
                 return
 
             # Verificar existencia
@@ -150,7 +142,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
                 if archivo_existente:
                     chunks_existentes = db.query(FilesChunks).filter(FilesChunks.files_id == archivo_existente.id).count()
                     if chunks_existentes > 0:
-                        logger.info(f"[JOB {job_id}] {key} ya procesado, saltando")
+                        # logger.info(f"[JOB {job_id}] {key} ya procesado, saltando")
                         return
             except Exception:
                 logger.exception(f"[JOB {job_id}] Error consultando DB para {key}, continuar")
@@ -163,14 +155,14 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
                     Params={"Bucket": bucket_name, "Key": key},
                     ExpiresIn=int(os.getenv("PRESIGNED_EXPIRATION", 3600)),
                 )
-                logger.info(f"[JOB {job_id}] Presigned URL generada para {key}")
+                # logger.info(f"[JOB {job_id}] Presigned URL generada para {key}")
             except Exception as e:
                 logger.exception(f"[JOB {job_id}] Error generando presigned URL para {key}: {e}")
                 return
 
             # Extraer texto
             try:
-                logger.info(f"[JOB {job_id}] Extrayendo texto de {key}")
+                # logger.info(f"[JOB {job_id}] Extrayendo texto de {key}")
                 texto_pdf = await extraer_texto_mejorado_async(url_presignada)
                 if not texto_pdf or not texto_pdf.strip():
                     logger.warning(f"[JOB {job_id}] No se extrajo texto de {key}")
@@ -181,12 +173,12 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
 
             # Dividir en chunks
             try:
-                logger.info(f"[JOB {job_id}] Dividiendo en chunks {key}")
+                # logger.info(f"[JOB {job_id}] Dividiendo en chunks {key}")
                 chunks = dividir_en_chunks_semanticos(texto_pdf, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
                 if not chunks:
                     logger.warning(f"[JOB {job_id}] No se generaron chunks para {key}")
                     return
-                logger.info(f"[JOB {job_id}] {len(chunks)} chunks generados para {key}")
+                # logger.info(f"[JOB {job_id}] {len(chunks)} chunks generados para {key}")
             except Exception as e:
                 logger.exception(f"[JOB {job_id}] Error dividiendo en chunks para {key}: {e}")
                 return
@@ -203,7 +195,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
                 db.add(archivo_db)
                 db.flush()
                 db.commit()
-                logger.info(f"[JOB {job_id}] Archivo guardado en DB id={archivo_db.id}")
+                # logger.info(f"[JOB {job_id}] Archivo guardado en DB id={archivo_db.id}")
             except IntegrityError:
                 db.rollback()
                 logger.warning(f"[JOB {job_id}] Archivo duplicado (IntegrityError) para {key}, skip")
@@ -215,9 +207,9 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
 
             # Generar embeddings
             try:
-                logger.info(f"[JOB {job_id}] Generando embeddings para {key}")
+                # logger.info(f"[JOB {job_id}] Generando embeddings para {key}")
                 embeddings = await generar_embeddings_async(chunks, max_concurrent=concurrency)
-                logger.info(f"[JOB {job_id}] Embeddings generados para {key}")
+                # logger.info(f"[JOB {job_id}] Embeddings generados para {key}")
             except Exception as e:
                 logger.exception(f"[JOB {job_id}] Error generando embeddings para {key}: {e}")
                 return
@@ -241,7 +233,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
                     db.commit()
                     saved = len(chunks_db)
                     total_chunks += saved
-                    logger.info(f"[JOB {job_id}] Guardados {saved} chunks para {key}")
+                    # logger.info(f"[JOB {job_id}] Guardados {saved} chunks para {key}")
             except Exception as e:
                 db.rollback()
                 logger.exception(f"[JOB {job_id}] Error guardando chunks para {key}: {e}")
@@ -258,7 +250,7 @@ async def _procesar_archivos_async(job_id: str, payload: Dict[str, Any]):
                 "total_chunks": total_chunks,
                 "current_file": key
             })
-            logger.info(f"[JOB {job_id}] Progreso {progress}% ({processed}/{total})")
+            # logger.info(f"[JOB {job_id}] Progreso {progress}% ({processed}/{total})")
 
     # Construir y ejecutar tasks async respetando concurrencia
     tasks = [procesar_obj(obj) for obj in objetos]

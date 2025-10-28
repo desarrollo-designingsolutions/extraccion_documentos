@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
-    await run_migrations()
+    run_migrations()
     logger.info("Cargando modelo reranker en startup")
     app.state.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device='cpu' or 'cuda')
     logger.info("Reranker cargado")

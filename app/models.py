@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text, ForeignKey, Numeric
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
@@ -14,6 +15,8 @@ class Files(Base):
     size = Column(BigInteger, nullable=False)
     url_preassigned = Column(String, nullable=False)
     text_extracted = Column(Text, nullable=True)
+    # JSON categorizado por la LLM (puede ser NULL)
+    json_category = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relación con chunks
