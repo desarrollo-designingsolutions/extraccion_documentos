@@ -41,9 +41,9 @@ async def shutdown_event():
 from routers import router as api_router
 app.include_router(api_router, prefix=prefix)
 
-@app.get("/")
-def root():
-    return {"mensaje": "API de AWS S3 corriendo."}
+# Importar y montar el web
+from web import router as web_router
+app.include_router(web_router)
 
 if __name__ == "__main__":
     import uvicorn

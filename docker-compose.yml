@@ -31,6 +31,20 @@ services:
     volumes:
       - ./app:/app
   
+  frontend:
+    build: ./
+    restart: always
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      - app
+    volumes:
+      - ./app:/app
+      - ./frontend:/app/frontend
+    command: ["streamlit", "run", "/app/frontend/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+  
   worker:
     build: ./
     restart: always

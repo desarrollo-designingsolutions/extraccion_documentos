@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Archivos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .loading-spinner {
+            display: none;
+        }
+        .json-view {
+            background-color: #f1f3f4;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 0, 0, 0.075);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Extracción Documentos</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Inicio</a>
+                <a class="nav-link" href="/list_files">Lista de Archivos</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1>Listado de archivos</h1>
+            </div>
+        </div>
+
+        <!-- Sidebar equivalente -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Controles</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="nitFilter" class="form-label">Filtrar por NIT</label>
+                            <input type="text" class="form-control" id="nitFilter" placeholder="Ingrese NIT">
+                        </div>
+                        <div class="mb-3">
+                            <label for="nameFilter" class="form-label">Buscar por nombre</label>
+                            <input type="text" class="form-control" id="nameFilter" placeholder="Ingrese nombre">
+                        </div>
+                        <button id="refreshBtn" class="btn btn-primary w-100">Refrescar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenido principal -->
+            <div class="col-md-9">
+                <div class="loading-spinner alert alert-info" id="loadingSpinner">
+                    Cargando archivos...
+                </div>
+
+                <div id="errorAlert" class="alert alert-danger" style="display: none;"></div>
+                <div id="infoAlert" class="alert alert-info" style="display: none;"></div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Archivos</h5>
+                        <span id="fileCount" class="badge bg-primary">0 archivos</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nombre</th>
+                                        <th>NIT</th>
+                                        <th>Número de factura</th>
+                                        <th>Tamaño</th>
+                                        <th>Respuesta IA</th>
+                                        <th>Creado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="filesTableBody">
+                                    <!-- Los datos se cargarán aquí dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para detalles del archivo -->
+    <div class="modal fade" id="fileModal" tabindex="-1" aria-labelledby="fileModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="fileModalLabel">Detalles del archivo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="selectedFileInfo"></div>
+                    <div class="mt-3">
+                        <button id="viewJsonBtn" class="btn btn-outline-secondary btn-sm">Ver JSON de categoría</button>
+                    </div>
+                    <div id="jsonView" class="json-view mt-3" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://localhost:8002/api/v1/list_files";
+        let allFiles = [];
+        let filteredFiles = [];
+        let selectedFile = null;
+        let fileModal = null;
+
+        // Inicializar modal de Bootstrap
+        document.addEventListener('DOMContentLoaded', function() {
+            fileModal = new bootstrap.Modal(document.getElementById('fileModal'));
+            loadFiles();
+        });
+
+        // Función para formatear el tamaño
+        function humanSize(bytes) {
+            if (!bytes) return "N/A";
+            const units = ["B", "KB", "MB", "GB", "TB"];
+            let size = bytes;
+            let unitIndex = 0;
+            
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            
+            return `${size.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+        }
+
+        // Función para formatear fecha
+        function formatDate(dateString) {
+            if (!dateString) return "N/A";
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString('es-ES');
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        // Función para cargar archivos
+        async function loadFiles() {
+            showLoading(true);
+            hideAlerts();
+            
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                if (data.mensaje === "OK" && data.objetos) {
+                    allFiles = data.objetos;
+                    applyFilters();
+                    showSuccess("Datos cargados correctamente");
+                } else {
+                    throw new Error("Formato de respuesta inválido");
+                }
+            } catch (error) {
+                showError(`Error al obtener datos: ${error.message}`);
+                allFiles = [];
+                applyFilters();
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Función para aplicar filtros
+        function applyFilters() {
+            const nitFilter = document.getElementById('nitFilter').value.toLowerCase();
+            const nameFilter = document.getElementById('nameFilter').value.toLowerCase();
+            
+            filteredFiles = allFiles.filter(file => {
+                const nitMatch = !nitFilter || (file.nit && file.nit.toString().toLowerCase().includes(nitFilter));
+                const nameMatch = !nameFilter || (file.name && file.name.toLowerCase().includes(nameFilter));
+                return nitMatch && nameMatch;
+            });
+            
+            renderTable();
+            updateFileCount();
+        }
+
+        // Función para renderizar la tabla
+        function renderTable() {
+            const tbody = document.getElementById('filesTableBody');
+            tbody.innerHTML = '';
+            
+            if (filteredFiles.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No se encontraron archivos</td></tr>';
+                return;
+            }
+            
+            filteredFiles.forEach(file => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${file.id || 'N/A'}</td>
+                    <td title="${file.name || ''}">${(file.name || '').substring(0, 50)}${(file.name || '').length > 50 ? '...' : ''}</td>
+                    <td>${file.nit || 'N/A'}</td>
+                    <td>${file.invoice_number || 'N/A'}</td>
+                    <td>${humanSize(file.size)}</td>
+                    <td>${file.json_category ? 'Generado' : 'Sin generar'}</td>
+                    <td>${formatDate(file.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary view-btn" data-id="${file.id}">Ver</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Agregar event listeners a los botones
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const fileId = parseInt(e.target.getAttribute('data-id'));
+                    selectFile(fileId);
+                });
+            });
+        }
+
+        // Función para seleccionar un archivo
+        function selectFile(fileId) {
+            selectedFile = allFiles.find(file => file.id === fileId);
+            if (selectedFile) {
+                showFileDetails(selectedFile);
+            }
+        }
+
+        // Función para mostrar detalles del archivo en la modal
+        function showFileDetails(file) {
+            const infoDiv = document.getElementById('selectedFileInfo');
+            
+            infoDiv.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>ID:</strong> ${file.id || 'N/A'}</p>
+                        <p><strong>Nombre:</strong> ${file.name || 'N/A'}</p>
+                        <p><strong>NIT:</strong> ${file.nit || 'N/A'}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Tamaño:</strong> ${humanSize(file.size)}</p>
+                        <p><strong>Creado:</strong> ${formatDate(file.created_at)}</p>
+                        <p><strong>Número de factura:</strong> ${file.invoice_number || 'N/A'}</p>
+                    </div>
+                </div>
+                ${file.url_preassigned ? `
+                    <div class="mt-3">
+                        <a href="${file.url_preassigned}" target="_blank" class="btn btn-success">Abrir Archivo</a>
+                    </div>
+                ` : ''}
+            `;
+            
+            // Configurar el botón de JSON
+            const viewJsonBtn = document.getElementById('viewJsonBtn');
+            const jsonView = document.getElementById('jsonView');
+            
+            // Remover event listeners anteriores
+            const newViewJsonBtn = viewJsonBtn.cloneNode(true);
+            viewJsonBtn.parentNode.replaceChild(newViewJsonBtn, viewJsonBtn);
+            
+            newViewJsonBtn.onclick = () => {
+                if (jsonView.style.display === 'none') {
+                    jsonView.innerHTML = `<pre>${JSON.stringify(file.json_category, null, 2)}</pre>`;
+                    jsonView.style.display = 'block';
+                    newViewJsonBtn.textContent = 'Ocultar JSON';
+                } else {
+                    jsonView.style.display = 'none';
+                    newViewJsonBtn.textContent = 'Ver JSON de categoría';
+                }
+            };
+            
+            // Resetear el estado del JSON view
+            jsonView.style.display = 'none';
+            newViewJsonBtn.textContent = 'Ver JSON de categoría';
+            
+            // Mostrar la modal
+            fileModal.show();
+        }
+
+        // Función para actualizar el contador
+        function updateFileCount() {
+            document.getElementById('fileCount').textContent = `${filteredFiles.length} archivos`;
+        }
+
+        // Funciones de UI
+        function showLoading(show) {
+            document.getElementById('loadingSpinner').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            const alert = document.getElementById('errorAlert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+        }
+
+        function showSuccess(message) {
+            const alert = document.getElementById('infoAlert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+
+        function hideAlerts() {
+            document.getElementById('errorAlert').style.display = 'none';
+            document.getElementById('infoAlert').style.display = 'none';
+        }
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', loadFiles);
+        document.getElementById('nitFilter').addEventListener('input', applyFilters);
+        document.getElementById('nameFilter').addEventListener('input', applyFilters);
+    </script>
+</body>
+</html>
