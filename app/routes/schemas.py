@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class RespuestaExito(BaseModel):
-    mensaje: str
+    code: int
     objetos: List[dict]
 
 class RespuestaLLM(BaseModel):

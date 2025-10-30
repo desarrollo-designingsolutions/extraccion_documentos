@@ -22,34 +22,10 @@ async def list_files(request: Request):
     """Ruta de lista de archivos"""
     return templates.TemplateResponse("list_files.html", {"request": request})
 
-@router.get("/download_files_csv")
-async def download_files_csv():
-    """Endpoint para descargar CSV de archivos"""
-    # Datos de ejemplo
-    sample = [
-        {"nombre": "factura_enero.pdf", "peso_kb": 125},
-        {"nombre": "contrato_cliente.docx", "peso_kb": 3420},
-        {"nombre": "informe_2024.xlsx", "peso_kb": 875},
-        {"nombre": "escaneo_venta.png", "peso_kb": 210},
-    ]
-    df = pd.DataFrame(sample)
-    
-    def human_size(kb: int) -> str:
-        if kb >= 1024:
-            mb = kb / 1024
-            return f"{mb:.2f} MB"
-        return f"{kb} KB"
-
-    df['peso'] = df['peso_kb'].apply(human_size)
-    df_display = df[['nombre', 'peso']]
-    
-    # Crear CSV en memoria
-    output = io.StringIO()
-    df_display.to_csv(output, index=False)
-    output.seek(0)
-    
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode('utf-8')),
-        media_type='text/csv',
-        headers={'Content-Disposition': 'attachment; filename=lista_archivos.csv'}
-    )
+@router.get("/chat")
+async def chat_page(request: Request, file_id: int = None, file_name: str = None):
+    return templates.TemplateResponse("chat_file.html", {
+        "request": request,
+        "file_id": file_id,
+        "file_name": file_name
+    })

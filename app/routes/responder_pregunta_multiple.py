@@ -35,4 +35,4 @@ async def responder_pregunta_multiple(request: Request, input_data: PreguntaMult
     task = procesar_pregunta_multiple.delay(payload)
 
     logger.info(f"Job encolado responder_pregunta_multiple id={task.id}")
-    return RespuestaExito(mensaje="Job encolado", objetos=[{"job_id": task.id}])
+    return RespuestaExito(code=200, objetos=[{"job_id": task.id}])

@@ -23,4 +23,3 @@ celery==5.3.6
 redis==5.0.1
 asyncpg==0.30.0
 greenlet==3.2.4
-streamlit==1.50.0

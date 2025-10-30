@@ -6,6 +6,7 @@ from routes.responder_pregunta_multiple import router as responder_pregunta_mult
 from routes.estadisticas_archivos import router as estadisticas_archivos
 from routes.search_invoice_number import router as search_invoice_number
 from routes.list_files import router as list_files
+from routes.chat_router import router as chat_router
 
 # Router principal
 router = APIRouter()
@@ -36,5 +37,8 @@ router.include_router(estadisticas_archivos)
 # Incluir el router de search invoice number
 router.include_router(search_invoice_number)
 
-# api de listar los archivos de la base de datos 
+# api de listar los archivos de la base de datos
 router.include_router(list_files)
+
+# api de chat con ia sobre documento individual
+router.include_router(chat_router)

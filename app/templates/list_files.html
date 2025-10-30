@@ -1,341 +1,900 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Archivos</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .loading-spinner {
-            display: none;
-        }
-        .json-view {
-            background-color: #f1f3f4;
-            padding: 10px;
-            border-radius: 5px;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .table-hover tbody tr:hover {
-            background-color: rgba(0, 0, 0, 0.075);
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">Extracción Documentos</a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/list_files">Lista de Archivos</a>
-            </div>
-        </div>
-    </nav>
-    
-    <div class="container-fluid mt-4">
-        <div class="row">
-            <div class="col-12">
-                <h1>Listado de archivos</h1>
-            </div>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Sidebar equivalente -->
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Controles</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="nitFilter" class="form-label">Filtrar por NIT</label>
-                            <input type="text" class="form-control" id="nitFilter" placeholder="Ingrese NIT">
+{% block title %}Lista de Archivos - Extracción Documentos{% endblock %}
+
+{% block navbar %}
+<!-- Barra de navegación específica para list_files -->
+<nav class="bg-indigo-700 shadow-md">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-3">
+            <a href="/" class="text-white text-xl font-bold flex items-center">
+                <i class="fas fa-file-alt mr-2"></i>Extracción Documentos
+            </a>
+            <div class="flex space-x-4">
+                <a href="/" class="text-white hover:text-indigo-200 transition-colors">Inicio</a>
+                <a href="/list_files" class="text-white font-semibold border-b-2 border-white">Lista de Archivos</a>
+            </div>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .json-view {
+        background-color: #f8fafc;
+        padding: 15px;
+        border-radius: 8px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 14px;
+        margin-top: 15px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .pdf-container {
+        width: 100%;
+        height: 500px;
+        border: 1px solid #cbd5e0;
+        border-radius: 8px;
+        margin-top: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .pdf-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+
+    .json-section {
+        margin-bottom: 15px;
+        border-left: 4px solid #3b82f6;
+        padding-left: 12px;
+        background-color: white;
+        border-radius: 4px;
+        padding: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .json-section h6 {
+        color: #3b82f6;
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+
+    .json-item {
+        margin-bottom: 8px;
+        padding: 5px 0;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .json-label {
+        font-weight: 600;
+        color: #374151;
+        min-width: 180px;
+        flex-shrink: 0;
+    }
+
+    .json-value {
+        color: #6b7280;
+        flex-grow: 1;
+    }
+
+    .json-array-item {
+        background-color: #dbeafe;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin: 3px;
+        display: inline-block;
+        font-size: 12px;
+        border: 1px solid #93c5fd;
+    }
+
+    .empty-field {
+        color: #ef4444;
+        font-style: italic;
+    }
+
+    .json-title {
+        color: #374151;
+        font-weight: 700;
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #e5e7eb;
+        font-size: 1.1rem;
+    }
+
+    .file-info-card {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #cbd5e0;
+    }
+
+    /* Animación de entrada para filas de tabla */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .fade-in {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    /* Estilos para el modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 40;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        width: 90%;
+        max-width: 1200px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Contenido principal -->
+<div class="container mx-auto px-4 py-6">
+    <!-- Encabezado -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+            <i class="fas fa-list mr-3 text-indigo-600"></i>Listado de archivos
+        </h1>
+        <p class="text-gray-600 mt-2">Gestiona y visualiza todos los documentos procesados</p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Panel lateral de filtros -->
+        <div class="w-full lg:w-1/4">
+            <!-- Tarjeta de filtros -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all hover-lift">
+                <div class="bg-indigo-600 text-white px-4 py-3">
+                    <h2 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-filter mr-2"></i>Filtros y Controles
+                    </h2>
+                </div>
+                <div class="p-4">
+                    <div class="mb-4">
+                        <label for="nitFilter" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por
+                            NIT</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-id-card text-gray-400"></i>
+                            </div>
+                            <input type="text" id="nitFilter"
+                                class="pl-10 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                placeholder="Ej: 123456789">
                         </div>
-                        <div class="mb-3">
-                            <label for="nameFilter" class="form-label">Buscar por nombre</label>
-                            <input type="text" class="form-control" id="nameFilter" placeholder="Ingrese nombre">
-                        </div>
-                        <button id="refreshBtn" class="btn btn-primary w-100">Refrescar</button>
                     </div>
+                    <div class="mb-6">
+                        <label for="nameFilter" class="block text-sm font-medium text-gray-700 mb-1">Buscar por
+                            nombre</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-search text-gray-400"></i>
+                            </div>
+                            <input type="text" id="nameFilter"
+                                class="pl-10 w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                placeholder="Ej: factura_enero">
+                        </div>
+                    </div>
+                    <button id="refreshBtn"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center transition-all">
+                        <i class="fas fa-sync-alt mr-2"></i>Refrescar lista
+                    </button>
+                    <button id="clearFilters"
+                        class="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center transition-all">
+                        <i class="fas fa-times mr-2"></i>Limpiar filtros
+                    </button>
                 </div>
             </div>
 
-            <!-- Contenido principal -->
-            <div class="col-md-9">
-                <div class="loading-spinner alert alert-info" id="loadingSpinner">
-                    Cargando archivos...
+            <!-- Tarjeta de estadísticas -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden mt-6 transition-all hover-lift">
+                <div class="bg-indigo-500 text-white px-4 py-3">
+                    <h2 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-chart-bar mr-2"></i>Estadísticas
+                    </h2>
                 </div>
-
-                <div id="errorAlert" class="alert alert-danger" style="display: none;"></div>
-                <div id="infoAlert" class="alert alert-info" style="display: none;"></div>
-
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Archivos</h5>
-                        <span id="fileCount" class="badge bg-primary">0 archivos</span>
+                <div class="p-4">
+                    <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                        <span class="text-gray-600">Total archivos:</span>
+                        <span id="totalFiles" class="font-bold text-gray-800">0</span>
                     </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nombre</th>
-                                        <th>NIT</th>
-                                        <th>Número de factura</th>
-                                        <th>Tamaño</th>
-                                        <th>Respuesta IA</th>
-                                        <th>Creado</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="filesTableBody">
-                                    <!-- Los datos se cargarán aquí dinámicamente -->
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                        <span class="text-gray-600">Con IA generada:</span>
+                        <span id="withAI" class="font-bold text-green-600">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Sin IA generada:</span>
+                        <span id="withoutAI" class="font-bold text-amber-500">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenido principal -->
+        <div class="w-full lg:w-3/4">
+            <!-- Indicadores de estado -->
+            <div id="loadingSpinner"
+                class="loading-spinner bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-center hidden">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+                <div class="text-blue-700 font-medium">Cargando archivos...</div>
+            </div>
+
+            <div id="errorAlert" class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 hidden">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-red-500 mr-3"></i>
+                    <div id="errorMessage" class="text-red-700"></div>
+                </div>
+            </div>
+            <div id="infoAlert" class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 hidden">
+                <div class="flex items-center">
+                    <i class="fas fa-info-circle text-blue-500 mr-3"></i>
+                    <div id="infoMessage" class="text-blue-700"></div>
+                </div>
+            </div>
+
+            <!-- Tarjeta de archivos -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all">
+                <div
+                    class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center mb-2 sm:mb-0">
+                        <i class="fas fa-files mr-2 text-indigo-600"></i>Archivos procesados
+                    </h2>
+                    <span id="fileCount"
+                        class="bg-indigo-100 text-indigo-800 text-sm font-semibold px-3 py-1 rounded-full">0
+                        archivos</span>
+                </div>
+                <div class="p-4 custom-scrollbar" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ID</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Nombre del archivo</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        NIT</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Factura</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Tamaño</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Estado IA</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Fecha</th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="filesTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Los datos se cargarán aquí dinámicamente -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Modal para detalles del archivo -->
-    <div class="modal fade" id="fileModal" tabindex="-1" aria-labelledby="fileModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="fileModalLabel">Detalles del archivo</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="selectedFileInfo"></div>
-                    <div class="mt-3">
-                        <button id="viewJsonBtn" class="btn btn-outline-secondary btn-sm">Ver JSON de categoría</button>
+<!-- Modal para detalles del archivo -->
+<div id="fileModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                <i class="fas fa-file-alt mr-2 text-indigo-600"></i>Detalles del archivo
+            </h3>
+            <button id="closeModal" class="text-gray-400 hover:text-gray-500 text-xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6 custom-scrollbar" style="max-height: calc(90vh - 120px); overflow-y: auto;">
+            <!-- Información básica del archivo -->
+            <div class="file-info-card">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="mb-2"><strong class="text-gray-700"><i
+                                    class="fas fa-id-badge mr-2 text-indigo-500"></i>ID:</strong> <span id="fileId"
+                                class="text-gray-600">N/A</span></p>
+                        <p class="mb-2"><strong class="text-gray-700"><i
+                                    class="fas fa-file mr-2 text-indigo-500"></i>Nombre:</strong> <span id="fileName"
+                                class="text-gray-600">N/A</span></p>
+                        <p><strong class="text-gray-700"><i
+                                    class="fas fa-id-card mr-2 text-indigo-500"></i>NIT:</strong> <span id="fileNit"
+                                class="text-gray-600">N/A</span></p>
                     </div>
-                    <div id="jsonView" class="json-view mt-3" style="display: none;"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <div>
+                        <p class="mb-2"><strong class="text-gray-700"><i
+                                    class="fas fa-weight mr-2 text-indigo-500"></i>Tamaño:</strong> <span id="fileSize"
+                                class="text-gray-600">N/A</span></p>
+                        <p class="mb-2"><strong class="text-gray-700"><i
+                                    class="fas fa-calendar mr-2 text-indigo-500"></i>Creado:</strong> <span
+                                id="fileCreated" class="text-gray-600">N/A</span></p>
+                        <p><strong class="text-gray-700"><i
+                                    class="fas fa-receipt mr-2 text-indigo-500"></i>Factura:</strong> <span
+                                id="fileInvoice" class="text-gray-600">N/A</span></p>
+                    </div>
                 </div>
             </div>
+
+            <!-- Información de categorización IA -->
+            <div class="mt-6">
+                <h4 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-robot mr-2 text-indigo-600"></i>Categorización por IA
+                </h4>
+                <div id="jsonView" class="json-view custom-scrollbar"></div>
+            </div>
+
+            <!-- Botones de acción -->
+            <div class="flex flex-wrap gap-3 mt-6">
+                <button id="openFileBtn"
+                    class="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-5 rounded-lg flex items-center transition-all">
+                    <i class="fas fa-external-link-alt mr-2"></i>
+                    <span id="openFileText">Abrir documento original</span>
+                    <span id="openFileSpinner" class="ml-2 hidden">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </span>
+                </button>
+                <button id="copyJsonBtn"
+                    class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 px-5 rounded-lg flex items-center transition-all">
+                    <i class="fas fa-copy mr-2"></i>Copiar JSON
+                </button>
+            </div>
+
+            <!-- Vista de PDF -->
+            <div id="pdfContainer" class="pdf-container mt-6 hidden">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="text-lg font-semibold text-gray-800 flex items-center">
+                        <i class="fas fa-file-pdf mr-2 text-red-500"></i>Vista previa del documento
+                    </h4>
+                    <button id="fullscreenBtn"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium py-1.5 px-3 rounded flex items-center transition-all">
+                        <i class="fas fa-expand mr-1"></i>Pantalla completa
+                    </button>
+                </div>
+                <iframe id="pdfViewer" class="pdf-iframe" src=""></iframe>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <button id="closeModalBtn"
+                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-5 rounded-lg flex items-center transition-all">
+                <i class="fas fa-times mr-2"></i>Cerrar
+            </button>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        const API_URL = "http://localhost:8002/api/v1/list_files";
-        let allFiles = [];
-        let filteredFiles = [];
-        let selectedFile = null;
-        let fileModal = null;
+{% block scripts %}
+<script>
+    const API_URL = "http://localhost:8002/api/v1/list_files";
+    const GET_URL_API = "http://localhost:8002/api/v1/get_url_file";
+    let allFiles = [];
+    let filteredFiles = [];
+    let selectedFile = null;
+    let fileModal = document.getElementById('fileModal');
 
-        // Inicializar modal de Bootstrap
-        document.addEventListener('DOMContentLoaded', function() {
-            fileModal = new bootstrap.Modal(document.getElementById('fileModal'));
-            loadFiles();
+    // Inicializar la aplicación
+    document.addEventListener('DOMContentLoaded', function () {
+        // Configurar event listeners para el modal
+        document.getElementById('closeModal').addEventListener('click', closeModal);
+        document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+
+        // Cerrar modal al hacer clic fuera
+        window.addEventListener('click', function (event) {
+            if (event.target === fileModal) {
+                closeModal();
+            }
         });
 
-        // Función para formatear el tamaño
-        function humanSize(bytes) {
-            if (!bytes) return "N/A";
-            const units = ["B", "KB", "MB", "GB", "TB"];
-            let size = bytes;
-            let unitIndex = 0;
-            
-            while (size >= 1024 && unitIndex < units.length - 1) {
-                size /= 1024;
-                unitIndex++;
-            }
-            
-            return `${size.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+        // Cargar archivos
+        loadFiles();
+    });
+
+    // Función para formatear el tamaño
+    function humanSize(bytes) {
+        if (!bytes) return "N/A";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let size = bytes;
+        let unitIndex = 0;
+
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
         }
 
-        // Función para formatear fecha
-        function formatDate(dateString) {
-            if (!dateString) return "N/A";
-            try {
-                const date = new Date(dateString);
-                return date.toLocaleString('es-ES');
-            } catch (e) {
-                return dateString;
-            }
-        }
+        return `${size.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+    }
 
-        // Función para cargar archivos
-        async function loadFiles() {
-            showLoading(true);
-            hideAlerts();
-            
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                if (data.mensaje === "OK" && data.objetos) {
-                    allFiles = data.objetos;
-                    applyFilters();
-                    showSuccess("Datos cargados correctamente");
-                } else {
-                    throw new Error("Formato de respuesta inválido");
-                }
-            } catch (error) {
-                showError(`Error al obtener datos: ${error.message}`);
-                allFiles = [];
+    // Función para formatear fecha
+    function formatDate(dateString) {
+        if (!dateString) return "N/A";
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleString('es-ES');
+        } catch (e) {
+            return dateString;
+        }
+    }
+
+    // Función para cargar archivos
+    async function loadFiles() {
+        showLoading(true);
+        hideAlerts();
+
+        try {
+            const response = await fetch(API_URL);
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            if (data.code === 200 && data.objetos) {
+                allFiles = data.objetos;
                 applyFilters();
-            } finally {
-                showLoading(false);
+                updateStatistics();
+                showSuccess("Datos cargados correctamente");
+            } else {
+                throw new Error("Formato de respuesta inválido");
             }
+        } catch (error) {
+            showError(`Error al obtener datos: ${error.message}`);
+            allFiles = [];
+            applyFilters();
+            updateStatistics();
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Función para aplicar filtros
+    function applyFilters() {
+        const nitFilter = document.getElementById('nitFilter').value.toLowerCase();
+        const nameFilter = document.getElementById('nameFilter').value.toLowerCase();
+
+        filteredFiles = allFiles.filter(file => {
+            const nitMatch = !nitFilter || (file.nit && file.nit.toString().toLowerCase().includes(nitFilter));
+            const nameMatch = !nameFilter || (file.name && file.name.toLowerCase().includes(nameFilter));
+            return nitMatch && nameMatch;
+        });
+
+        renderTable();
+        updateFileCount();
+    }
+
+    // Función para actualizar estadísticas
+    function updateStatistics() {
+        const totalFiles = allFiles.length;
+        const withAI = allFiles.filter(file => file.json_category).length;
+        const withoutAI = totalFiles - withAI;
+
+        document.getElementById('totalFiles').textContent = totalFiles;
+        document.getElementById('withAI').textContent = withAI;
+        document.getElementById('withoutAI').textContent = withoutAI;
+    }
+
+    // Función para renderizar la tabla
+    function renderTable() {
+        const tbody = document.getElementById('filesTableBody');
+        tbody.innerHTML = '';
+
+        if (filteredFiles.length === 0) {
+            tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-4 py-8 text-center">
+                            <div class="flex flex-col items-center justify-center text-gray-500">
+                                <i class="fas fa-folder-open text-4xl mb-3"></i>
+                                <p class="text-lg mb-4">No se encontraron archivos</p>
+                                <button id="clearFiltersTable" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-all">
+                                    Limpiar filtros
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+
+            document.getElementById('clearFiltersTable').addEventListener('click', clearFilters);
+            return;
         }
 
-        // Función para aplicar filtros
-        function applyFilters() {
-            const nitFilter = document.getElementById('nitFilter').value.toLowerCase();
-            const nameFilter = document.getElementById('nameFilter').value.toLowerCase();
-            
-            filteredFiles = allFiles.filter(file => {
-                const nitMatch = !nitFilter || (file.nit && file.nit.toString().toLowerCase().includes(nitFilter));
-                const nameMatch = !nameFilter || (file.name && file.name.toLowerCase().includes(nameFilter));
-                return nitMatch && nameMatch;
-            });
-            
-            renderTable();
-            updateFileCount();
-        }
+        filteredFiles.forEach((file, index) => {
+            const row = document.createElement('tr');
+            const hasAI = file.json_category ? true : false;
 
-        // Función para renderizar la tabla
-        function renderTable() {
-            const tbody = document.getElementById('filesTableBody');
-            tbody.innerHTML = '';
-            
-            if (filteredFiles.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No se encontraron archivos</td></tr>';
-                return;
-            }
-            
-            filteredFiles.forEach(file => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${file.id || 'N/A'}</td>
-                    <td title="${file.name || ''}">${(file.name || '').substring(0, 50)}${(file.name || '').length > 50 ? '...' : ''}</td>
-                    <td>${file.nit || 'N/A'}</td>
-                    <td>${file.invoice_number || 'N/A'}</td>
-                    <td>${humanSize(file.size)}</td>
-                    <td>${file.json_category ? 'Generado' : 'Sin generar'}</td>
-                    <td>${formatDate(file.created_at)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary view-btn" data-id="${file.id}">Ver</button>
+            // Agregar animación de entrada con retraso progresivo
+            row.style.animationDelay = `${index * 0.05}s`;
+            row.classList.add('fade-in');
+
+            row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap font-semibold text-gray-900">${file.id || 'N/A'}</td>
+                    <td class="px-4 py-3" title="${file.name || ''}">
+                        <div class="flex items-center">
+                            <i class="fas fa-file-pdf text-red-500 mr-2"></i>
+                            <span class="truncate max-w-xs">${file.name || 'N/A'}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">${file.nit || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">${file.invoice_number || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">${humanSize(file.size)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${hasAI ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}">
+                            ${hasAI ?
+                    '<i class="fas fa-check-circle mr-1"></i> Generado' :
+                    '<i class="fas fa-clock mr-1"></i> Pendiente'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">${formatDate(file.created_at)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap flex">
+                        <button class="view-btn bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-medium py-1.5 px-3 rounded-lg flex items-center transition-all" data-id="${file.id}" title="Ver detalles">
+                            <i class="fas fa-eye mr-1"></i>Ver
+                        </button>
+
+                        <button class="chat-btn bg-green-100 hover:bg-green-200 text-green-800 font-medium py-1.5 px-3 rounded-lg flex items-center transition-all ml-4" data-id="${file.id}" data-name="${file.name}" title="Chat con documento">
+                            <i class="fas fa-comments mr-1"></i>Chat
+                        </button>
                     </td>
                 `;
-                tbody.appendChild(row);
-            });
-            
-            // Agregar event listeners a los botones
-            document.querySelectorAll('.view-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const fileId = parseInt(e.target.getAttribute('data-id'));
-                    selectFile(fileId);
-                });
-            });
-        }
+            tbody.appendChild(row);
+        });
 
-        // Función para seleccionar un archivo
-        function selectFile(fileId) {
-            selectedFile = allFiles.find(file => file.id === fileId);
-            if (selectedFile) {
-                showFileDetails(selectedFile);
+        // Agregar event listeners a los botones
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const fileId = parseInt(e.target.closest('.view-btn').getAttribute('data-id'));
+                selectFile(fileId);
+            });
+        });
+
+        // Agregar event listeners a los botones de chat
+        document.querySelectorAll('.chat-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const fileId = parseInt(e.target.closest('.chat-btn').getAttribute('data-id'));
+                const fileName = e.target.closest('.chat-btn').getAttribute('data-name');
+                openChat(fileId, fileName);
+            });
+        });
+    }
+
+    // Función para seleccionar un archivo
+    function selectFile(fileId) {
+        selectedFile = allFiles.find(file => file.id === fileId);
+        if (selectedFile) {
+            showFileDetails(selectedFile);
+        }
+    }
+
+    // Función para abrir chat
+    function openChat(fileId, fileName) {
+        window.location.href = `/chat?file_id=${fileId}&file_name=${encodeURIComponent(fileName)}`;
+    }
+
+    // Función para obtener URL del archivo
+    async function getFileUrl(fileId) {
+        try {
+            const response = await fetch(GET_URL_API, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_id: fileId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
+
+            const data = await response.json();
+            if (data.code === 200 && data.url) {
+                return data.url;
+            } else {
+                throw new Error("Formato de respuesta inválido");
+            }
+        } catch (error) {
+            throw new Error(`Error al obtener URL: ${error.message}`);
+        }
+    }
+
+    // Función para formatear el JSON de categoría de manera organizada
+    function formatJsonCategory(jsonData) {
+        if (!jsonData) {
+            return '<div class="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg flex items-center"><i class="fas fa-exclamation-triangle mr-3"></i>No hay datos de categoría disponibles</div>';
         }
 
-        // Función para mostrar detalles del archivo en la modal
-        function showFileDetails(file) {
-            const infoDiv = document.getElementById('selectedFileInfo');
-            
-            infoDiv.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>ID:</strong> ${file.id || 'N/A'}</p>
-                        <p><strong>Nombre:</strong> ${file.name || 'N/A'}</p>
-                        <p><strong>NIT:</strong> ${file.nit || 'N/A'}</p>
+        let html = '<div class="json-title"><i class="fas fa-project-diagram mr-2"></i>Categorización del Documento</div>';
+
+        // Resumen
+        if (jsonData.resumen) {
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-file-alt mr-2"></i>Resumen</h6>
+                        <div class="json-item">
+                            <span class="json-value">${jsonData.resumen.replace(/\n/g, '<br>')}</span>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <p><strong>Tamaño:</strong> ${humanSize(file.size)}</p>
-                        <p><strong>Creado:</strong> ${formatDate(file.created_at)}</p>
-                        <p><strong>Número de factura:</strong> ${file.invoice_number || 'N/A'}</p>
+                `;
+        }
+
+        // Datos de prestación de servicios
+        if (jsonData.datos_prestacion_servicios) {
+            const dps = jsonData.datos_prestacion_servicios;
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-clipboard-list mr-2"></i>Datos de Prestación de Servicios</h6>
+                        <div class="json-item">
+                            <span class="json-label">Pagador:</span>
+                            <span class="json-value ${!dps.pagador ? 'empty-field' : ''}">${dps.pagador || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Emisor de factura:</span>
+                            <span class="json-value ${!dps.emisor_factura ? 'empty-field' : ''}">${dps.emisor_factura || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Número de factura:</span>
+                            <span class="json-value ${!dps.numero_factura ? 'empty-field' : ''}">${dps.numero_factura || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Tipo de documento:</span>
+                            <span class="json-value ${!dps.tipo_documento ? 'empty-field' : ''}">${dps.tipo_documento || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Nombre del paciente:</span>
+                            <span class="json-value ${!dps.nombre_paciente ? 'empty-field' : ''}">${dps.nombre_paciente || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Número de documento:</span>
+                            <span class="json-value ${!dps.numero_documento ? 'empty-field' : ''}">${dps.numero_documento || 'No especificado'}</span>
+                        </div>
+                        <div class="json-item">
+                            <span class="json-label">Fecha de expedición de factura:</span>
+                            <span class="json-value ${!dps.fecha_expedicion_factura ? 'empty-field' : ''}">${dps.fecha_expedicion_factura || 'No especificado'}</span>
+                        </div>
+                        ${dps.autorizacion && dps.autorizacion.length > 0 ? `
+                            <div class="json-item">
+                                <span class="json-label">Autorizaciones:</span>
+                                <div class="mt-1">
+                                    ${dps.autorizacion.map(auth => `<span class="json-array-item">${auth}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
-                </div>
-                ${file.url_preassigned ? `
-                    <div class="mt-3">
-                        <a href="${file.url_preassigned}" target="_blank" class="btn btn-success">Abrir Archivo</a>
+                `;
+        }
+
+        // Prestación de servicios de salud
+        if (jsonData.prestacion_servicios_de_salud && jsonData.prestacion_servicios_de_salud.length > 0) {
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-stethoscope mr-2"></i>Prestación de Servicios de Salud</h6>
+                        <div class="mt-1">
+                            ${jsonData.prestacion_servicios_de_salud.map(item => `<span class="json-array-item">${item}</span>`).join('')}
+                        </div>
                     </div>
-                ` : ''}
-            `;
-            
-            // Configurar el botón de JSON
-            const viewJsonBtn = document.getElementById('viewJsonBtn');
-            const jsonView = document.getElementById('jsonView');
-            
-            // Remover event listeners anteriores
-            const newViewJsonBtn = viewJsonBtn.cloneNode(true);
-            viewJsonBtn.parentNode.replaceChild(newViewJsonBtn, viewJsonBtn);
-            
-            newViewJsonBtn.onclick = () => {
-                if (jsonView.style.display === 'none') {
-                    jsonView.innerHTML = `<pre>${JSON.stringify(file.json_category, null, 2)}</pre>`;
-                    jsonView.style.display = 'block';
-                    newViewJsonBtn.textContent = 'Ocultar JSON';
-                } else {
-                    jsonView.style.display = 'none';
-                    newViewJsonBtn.textContent = 'Ver JSON de categoría';
-                }
-            };
-            
-            // Resetear el estado del JSON view
-            jsonView.style.display = 'none';
-            newViewJsonBtn.textContent = 'Ver JSON de categoría';
-            
-            // Mostrar la modal
-            fileModal.show();
+                `;
         }
 
-        // Función para actualizar el contador
-        function updateFileCount() {
-            document.getElementById('fileCount').textContent = `${filteredFiles.length} archivos`;
+        // Documentos contractuales
+        if (jsonData.documentos_contractuales && jsonData.documentos_contractuales.length > 0) {
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-file-contract mr-2"></i>Documentos Contractuales</h6>
+                        <div class="mt-1">
+                            ${jsonData.documentos_contractuales.map(item => `<span class="json-array-item">${item}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
         }
 
-        // Funciones de UI
-        function showLoading(show) {
-            document.getElementById('loadingSpinner').style.display = show ? 'block' : 'none';
+        // Documentos administrativos
+        if (jsonData.documentos_administrativos && jsonData.documentos_administrativos.length > 0) {
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-tasks mr-2"></i>Documentos Administrativos</h6>
+                        <div class="mt-1">
+                            ${jsonData.documentos_administrativos.map(item => `<span class="json-array-item">${item}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
         }
 
-        function showError(message) {
-            const alert = document.getElementById('errorAlert');
-            alert.textContent = message;
-            alert.style.display = 'block';
+        // Otros
+        if (jsonData.otros && jsonData.otros.length > 0) {
+            html += `
+                    <div class="json-section">
+                        <h6><i class="fas fa-ellipsis-h mr-2"></i>Otros</h6>
+                        <div class="mt-1">
+                            ${jsonData.otros.map(item => `<span class="json-array-item">${item}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
         }
 
-        function showSuccess(message) {
-            const alert = document.getElementById('infoAlert');
-            alert.textContent = message;
-            alert.style.display = 'block';
-            setTimeout(() => {
-                alert.style.display = 'none';
-            }, 3000);
-        }
+        return html || '<div class="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center"><i class="fas fa-info-circle mr-3"></i>Estructura JSON vacía o no reconocida</div>';
+    }
 
-        function hideAlerts() {
-            document.getElementById('errorAlert').style.display = 'none';
-            document.getElementById('infoAlert').style.display = 'none';
-        }
+    // Función para mostrar detalles del archivo en la modal
+    function showFileDetails(file) {
+        // Actualizar información básica
+        document.getElementById('fileId').textContent = file.id || 'N/A';
+        document.getElementById('fileName').textContent = file.name || 'N/A';
+        document.getElementById('fileNit').textContent = file.nit || 'N/A';
+        document.getElementById('fileSize').textContent = humanSize(file.size);
+        document.getElementById('fileCreated').textContent = formatDate(file.created_at);
+        document.getElementById('fileInvoice').textContent = file.invoice_number || 'N/A';
 
-        // Event listeners
-        document.getElementById('refreshBtn').addEventListener('click', loadFiles);
-        document.getElementById('nitFilter').addEventListener('input', applyFilters);
-        document.getElementById('nameFilter').addEventListener('input', applyFilters);
-    </script>
-</body>
-</html>
+        // Mostrar JSON de categoría
+        const jsonView = document.getElementById('jsonView');
+        jsonView.innerHTML = formatJsonCategory(file.json_category);
+
+        // Configurar el botón de abrir archivo
+        const openFileBtn = document.getElementById('openFileBtn');
+        const openFileText = document.getElementById('openFileText');
+        const openFileSpinner = document.getElementById('openFileSpinner');
+        const pdfContainer = document.getElementById('pdfContainer');
+        const pdfViewer = document.getElementById('pdfViewer');
+
+        // Restablecer estado del botón
+        openFileText.textContent = 'Abrir documento original';
+        openFileSpinner.classList.add('hidden');
+        openFileBtn.disabled = false;
+        openFileBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+        openFileBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+        // Ocultar PDF container inicialmente
+        pdfContainer.classList.add('hidden');
+
+        // Configurar evento del botón
+        openFileBtn.onclick = async () => {
+            // Mostrar spinner y deshabilitar botón
+            openFileText.textContent = 'Cargando documento...';
+            openFileSpinner.classList.remove('hidden');
+            openFileBtn.disabled = true;
+
+            try {
+                const fileUrl = await getFileUrl(file.id);
+
+                // Mostrar el PDF en el iframe
+                pdfViewer.src = fileUrl;
+                pdfContainer.classList.remove('hidden');
+
+                // Restaurar botón
+                openFileText.textContent = 'Documento cargado';
+                openFileSpinner.classList.add('hidden');
+                openFileBtn.disabled = false;
+                openFileBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                openFileBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+
+            } catch (error) {
+                showError(`Error al abrir archivo: ${error.message}`);
+
+                // Restaurar botón
+                openFileText.textContent = 'Abrir documento original';
+                openFileSpinner.classList.add('hidden');
+                openFileBtn.disabled = false;
+            }
+        };
+
+        // Configurar botón de pantalla completa
+        document.getElementById('fullscreenBtn').onclick = function () {
+            if (pdfViewer.requestFullscreen) {
+                pdfViewer.requestFullscreen();
+            } else if (pdfViewer.webkitRequestFullscreen) {
+                pdfViewer.webkitRequestFullscreen();
+            } else if (pdfViewer.msRequestFullscreen) {
+                pdfViewer.msRequestFullscreen();
+            }
+        };
+
+        // Configurar botón de copiar JSON
+        document.getElementById('copyJsonBtn').onclick = function () {
+            const jsonText = JSON.stringify(file.json_category, null, 2);
+            navigator.clipboard.writeText(jsonText).then(() => {
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-check mr-2"></i>¡Copiado!';
+                this.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+                this.classList.add('bg-green-100', 'text-green-800');
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.classList.remove('bg-green-100', 'text-green-800');
+                    this.classList.add('bg-gray-200', 'hover:bg-gray-300');
+                }, 2000);
+            });
+        };
+
+        // Mostrar la modal
+        document.querySelector('#fileModal h3').textContent = `Detalles: ${file.name || 'Archivo'}`;
+        fileModal.style.display = 'flex';
+    }
+
+    // Función para cerrar modal
+    function closeModal() {
+        fileModal.style.display = 'none';
+    }
+
+    // Función para actualizar el contador
+    function updateFileCount() {
+        document.getElementById('fileCount').textContent = `${filteredFiles.length} archivos`;
+    }
+
+    // Función para limpiar filtros
+    function clearFilters() {
+        document.getElementById('nitFilter').value = '';
+        document.getElementById('nameFilter').value = '';
+        applyFilters();
+    }
+
+    // Funciones de UI
+    function showLoading(show) {
+        const spinner = document.getElementById('loadingSpinner');
+        if (show) {
+            spinner.classList.remove('hidden');
+        } else {
+            spinner.classList.add('hidden');
+        }
+    }
+
+    function showError(message) {
+        const alert = document.getElementById('errorAlert');
+        document.getElementById('errorMessage').textContent = message;
+        alert.classList.remove('hidden');
+    }
+
+    function showSuccess(message) {
+        const alert = document.getElementById('infoAlert');
+        document.getElementById('infoMessage').textContent = message;
+        alert.classList.remove('hidden');
+        setTimeout(() => {
+            alert.classList.add('hidden');
+        }, 4000);
+    }
+
+    function hideAlerts() {
+        document.getElementById('errorAlert').classList.add('hidden');
+        document.getElementById('infoAlert').classList.add('hidden');
+    }
+
+    // Event listeners
+    document.getElementById('refreshBtn').addEventListener('click', loadFiles);
+    document.getElementById('nitFilter').addEventListener('input', applyFilters);
+    document.getElementById('nameFilter').addEventListener('input', applyFilters);
+    document.getElementById('clearFilters').addEventListener('click', clearFilters);
+</script>
+{% endblock %}

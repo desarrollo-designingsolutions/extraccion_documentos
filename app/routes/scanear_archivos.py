@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from typing import List, Optional
 from jobs.job_scanear import procesar_archivos
 from .schemas import RespuestaExito
@@ -27,6 +27,6 @@ async def importar_y_guardar_archivos_mejorado(
         "bucket": bucket_name,
     })
     return RespuestaExito(
-        mensaje="Job encolado",
+        code=200,
         objetos=[{"job_id": task.id}],
     )

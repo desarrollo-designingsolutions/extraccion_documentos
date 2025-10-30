@@ -70,7 +70,7 @@ async def fetch_chunks(db: AsyncSession, embedding: List[float], file_id: int) -
         """
     )
     try:
-        result = await db.execute(query, {"query_emb": embedding_str, "id": file_id})
+        result = db.execute(query, {"query_emb": embedding_str, "id": file_id})
         return result.fetchall()
     except Exception:
         logger.exception("Error en búsqueda vectorial")
@@ -245,7 +245,7 @@ async def responder_pregunta_mejorado(request: Request, input_data: PreguntaInpu
     # Debug count (async)
     query_debug = text("SELECT COUNT(*) as total FROM files_chunks WHERE files_id = :id")
     try:
-        count_result = await db.execute(query_debug, {"id": input_data.id})
+        count_result = db.execute(query_debug, {"id": input_data.id})
         count = count_result.scalar()
     except Exception:
         logger.exception("Error en query debug")
@@ -254,7 +254,7 @@ async def responder_pregunta_mejorado(request: Request, input_data: PreguntaInpu
     if count == 0:
         query_archivo = text("SELECT id FROM files WHERE id = :id")
         try:
-            archivo_result = await db.execute(query_archivo, {"id": input_data.id})
+            archivo_result = db.execute(query_archivo, {"id": input_data.id})
             if archivo_result.fetchone() is None:
                 raise HTTPException(status_code=404, detail="Archivo no encontrado")
         except Exception:

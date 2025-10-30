@@ -1,4 +1,4 @@
-from sqlalchemy import inspect, text # type: ignore
+from sqlalchemy import inspect, text
 from database import engine, Base
 
 def run_migrations():

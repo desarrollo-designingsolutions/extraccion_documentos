@@ -1,0 +1,731 @@
+{% extends "base.html" %}
+
+{% block title %}Chat con Documento - Extracción Documentos{% endblock %}
+
+{% block navbar %}
+<!-- Barra de navegación específica para chat -->
+<nav class="bg-indigo-700 shadow-md">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-3">
+            <a href="/" class="text-white text-xl font-bold flex items-center">
+                <i class="fas fa-file-alt mr-2"></i>Extracción Documentos
+            </a>
+            <div class="flex space-x-4">
+                <a href="/" class="text-white hover:text-indigo-200 transition-colors">Inicio</a>
+                <a href="/list_files" class="text-white hover:text-indigo-200 transition-colors">Lista de Archivos</a>
+                <a href="/chat" class="text-white font-semibold border-b-2 border-white">Chat con Documento</a>
+            </div>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        height: calc(100vh - 200px);
+        max-height: 600px;
+    }
+    .messages-container {
+        height: calc(100% - 80px);
+        overflow-y: auto;
+    }
+    .message {
+        max-width: 80%;
+        margin-bottom: 1rem;
+        animation: fadeIn 0.3s ease-out;
+    }
+    .user-message {
+        margin-left: auto;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 18px 18px 4px 18px;
+    }
+    .assistant-message {
+        margin-right: auto;
+        background-color: #f1f5f9;
+        color: #374151;
+        border-radius: 18px 18px 18px 4px;
+        border: 1px solid #e2e8f0;
+    }
+    .typing-indicator {
+        display: inline-flex;
+        align-items: center;
+    }
+    .typing-dot {
+        height: 8px;
+        width: 8px;
+        background-color: #9ca3af;
+        border-radius: 50%;
+        margin: 0 2px;
+        animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typing {
+        0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .file-info-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    .send-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .error-message {
+        background: linear-gradient(135deg, #feb2b2 0%, #fc8181 100%);
+        color: white;
+    }
+    .success-message {
+        background: linear-gradient(135deg, #9ae6b4 0%, #68d391 100%);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Encabezado -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+            <i class="fas fa-comments mr-3 text-indigo-600"></i>Chat con Documento
+        </h1>
+        <p class="text-gray-600 mt-2">Interactúa con tu documento usando inteligencia artificial</p>
+    </div>
+
+    <!-- Información del archivo -->
+    <div id="fileInfo" class="file-info-banner rounded-xl p-4 mb-6 shadow-lg">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i class="fas fa-file-pdf text-white text-2xl mr-3"></i>
+                <div>
+                    <h3 id="fileName" class="text-xl font-bold text-white">Cargando información del documento...</h3>
+                    <p id="fileDetails" class="text-indigo-100">ID: <span id="fileIdValue">-</span></p>
+                </div>
+            </div>
+            <button id="backToList" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-4 rounded-lg flex items-center transition-all">
+                <i class="fas fa-arrow-left mr-2"></i>Volver a la lista
+            </button>
+        </div>
+    </div>
+
+    <!-- Alertas del sistema -->
+    <div id="systemAlert" class="hidden rounded-xl p-4 mb-4 transition-all">
+        <div class="flex items-center">
+            <i class="fas fa-info-circle mr-3 text-lg"></i>
+            <span id="systemAlertMessage"></span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Panel lateral de sugerencias -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all hover-lift">
+                <div class="bg-indigo-600 text-white px-4 py-3">
+                    <h3 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>Preguntas Sugeridas
+                    </h3>
+                </div>
+                <div class="p-4">
+                    <div class="space-y-3">
+                        <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
+                            <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
+                            <span>¿Cuál es el resumen de este documento?</span>
+                        </button>
+                        <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
+                            <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
+                            <span>¿Quién es el emisor de la factura?</span>
+                        </button>
+                        <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
+                            <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
+                            <span>¿Qué servicios de salud se prestaron?</span>
+                        </button>
+                        <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
+                            <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
+                            <span>¿Cuáles son los datos del paciente?</span>
+                        </button>
+                        <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
+                            <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
+                            <span>Extraer información importante</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información del modelo -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden mt-6 transition-all hover-lift">
+                <div class="bg-indigo-500 text-white px-4 py-3">
+                    <h3 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-robot mr-2"></i>Información del Modelo
+                    </h3>
+                </div>
+                <div class="p-4">
+                    <div class="space-y-2 text-sm text-gray-600">
+                        <div class="flex justify-between">
+                            <span>Modelo:</span>
+                            <span class="font-medium">GPT-4o Mini</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Contexto:</span>
+                            <span class="font-medium">Documento completo</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Temperatura:</span>
+                            <span class="font-medium">0.1</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Estado:</span>
+                            <span id="apiStatus" class="font-medium text-green-600">Conectado</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estadísticas de la sesión -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden mt-6 transition-all hover-lift">
+                <div class="bg-indigo-400 text-white px-4 py-3">
+                    <h3 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-chart-bar mr-2"></i>Estadísticas
+                    </h3>
+                </div>
+                <div class="p-4">
+                    <div class="space-y-2 text-sm text-gray-600">
+                        <div class="flex justify-between">
+                            <span>Mensajes:</span>
+                            <span id="messageCount" class="font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Fragmentos usados:</span>
+                            <span id="chunksUsed" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Última respuesta:</span>
+                            <span id="lastResponseTime" class="font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Área principal del chat -->
+        <div class="lg:col-span-3">
+            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all">
+                <div class="chat-container flex flex-col">
+                    <!-- Cabecera del chat -->
+                    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Conversación
+                        </h3>
+                        <button id="clearChat" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium py-2 px-3 rounded-lg flex items-center transition-all">
+                            <i class="fas fa-trash-alt mr-2"></i>Limpiar Chat
+                        </button>
+                    </div>
+
+                    <!-- Mensajes -->
+                    <div id="messagesContainer" class="messages-container p-6 custom-scrollbar flex-grow">
+                        <div id="welcomeMessage" class="message assistant-message p-4">
+                            <div class="flex items-start">
+                                <div class="bg-indigo-100 p-2 rounded-full mr-3">
+                                    <i class="fas fa-robot text-indigo-600"></i>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-800">Asistente IA</p>
+                                    <p class="mt-1">¡Hola! Soy tu asistente de IA. Puedo ayudarte a analizar y entender el contenido de este documento. ¿En qué puedo asistirte?</p>
+                                    <p class="mt-2 text-sm text-gray-600">Puedes hacer preguntas sobre el contenido, solicitar resúmenes o extraer información específica.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Área de entrada -->
+                    <div class="p-4 border-t border-gray-200">
+                        <form id="chatForm" class="flex space-x-3">
+                            <div class="flex-grow relative">
+                                <textarea 
+                                    id="messageInput" 
+                                    rows="1" 
+                                    placeholder="Escribe tu pregunta sobre el documento..." 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none transition-all"
+                                    style="min-height: 50px; max-height: 120px;"
+                                ></textarea>
+                                <div class="absolute bottom-2 right-2 text-gray-400 text-sm">
+                                    <span id="charCount">0</span>/1000
+                                </div>
+                            </div>
+                            <button 
+                                type="submit" 
+                                id="sendButton"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg flex items-center transition-all send-button"
+                                disabled
+                            >
+                                <i class="fas fa-paper-plane mr-2"></i>Enviar
+                            </button>
+                        </form>
+                        <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                            <span>Presiona Enter para enviar, Shift+Enter para nueva línea</span>
+                            <span id="typingIndicator" class="hidden">
+                                <span class="typing-indicator">
+                                    <span class="typing-dot"></span>
+                                    <span class="typing-dot"></span>
+                                    <span class="typing-dot"></span>
+                                </span>
+                                El asistente está escribiendo...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Obtener parámetros de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileId = urlParams.get('file_id');
+    const fileName = urlParams.get('file_name');
+
+    // Elementos del DOM
+    const fileInfoElement = document.getElementById('fileInfo');
+    const fileNameElement = document.getElementById('fileName');
+    const fileIdElement = document.getElementById('fileIdValue');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const charCount = document.getElementById('charCount');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const welcomeMessage = document.getElementById('welcomeMessage');
+    const backToListButton = document.getElementById('backToList');
+    const clearChatButton = document.getElementById('clearChat');
+    const systemAlert = document.getElementById('systemAlert');
+    const systemAlertMessage = document.getElementById('systemAlertMessage');
+    const messageCountElement = document.getElementById('messageCount');
+    const chunksUsedElement = document.getElementById('chunksUsed');
+    const lastResponseTimeElement = document.getElementById('lastResponseTime');
+    const apiStatusElement = document.getElementById('apiStatus');
+
+    // Estado del chat
+    let chatHistory = [];
+    let isProcessing = false;
+    let currentStreamingMessage = null;
+    let messageCount = 0;
+
+    // Inicializar la aplicación
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeChat();
+        setupEventListeners();
+        testAPIconnection();
+    });
+
+    function initializeChat() {
+        // Mostrar información del archivo
+        if (fileId && fileName) {
+            fileNameElement.textContent = decodeURIComponent(fileName);
+            fileIdElement.textContent = fileId;
+            showSystemAlert(`Chat iniciado con el documento: "${decodeURIComponent(fileName)}"`, 'success');
+        } else {
+            fileNameElement.textContent = 'Error: No se proporcionó información del archivo';
+            fileInfoElement.classList.add('error-message');
+            showSystemAlert('Error: No se encontró información del archivo', 'error');
+        }
+
+        // Cargar historial del chat si existe
+        loadChatHistory();
+        updateMessageCount();
+    }
+
+    function setupEventListeners() {
+        // Envío del formulario
+        chatForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            sendMessage();
+        });
+
+        // Validación del textarea
+        messageInput.addEventListener('input', function() {
+            const text = messageInput.value.trim();
+            charCount.textContent = text.length;
+            sendButton.disabled = text.length === 0 || text.length > 1000 || isProcessing;
+            
+            // Autoajustar altura
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Atajos de teclado
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!sendButton.disabled) {
+                    sendMessage();
+                }
+            }
+        });
+
+        // Botones de sugerencias
+        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const suggestion = this.querySelector('span').textContent;
+                messageInput.value = suggestion;
+                messageInput.dispatchEvent(new Event('input'));
+                // Enfocar y enviar después de un breve delay
+                setTimeout(() => {
+                    messageInput.focus();
+                    sendMessage();
+                }, 100);
+            });
+        });
+
+        // Botón de volver
+        backToListButton.addEventListener('click', function() {
+            window.location.href = '/list_files';
+        });
+
+        // Botón de limpiar chat
+        clearChatButton.addEventListener('click', function() {
+            clearChatHistory();
+        });
+    }
+
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message || isProcessing) return;
+
+        // Agregar mensaje del usuario al chat
+        addMessageToChat('user', message);
+        
+        // Limpiar input
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        messageInput.dispatchEvent(new Event('input'));
+        
+        // Mostrar indicador de typing y crear mensaje vacío del asistente
+        showTypingIndicator();
+        currentStreamingMessage = createEmptyAssistantMessage();
+        
+        // Deshabilitar entrada
+        setProcessingState(true);
+
+        const startTime = Date.now();
+
+        try {
+            // Llamar a la API real
+            const response = await getAIResponse(message, fileId, getCompleteChatHistory(), true);
+            
+            // Ocultar indicador de typing
+            hideTypingIndicator();
+            
+            // Actualizar estadísticas
+            const responseTime = Date.now() - startTime;
+            lastResponseTimeElement.textContent = `${responseTime}ms`;
+            
+        } catch (error) {
+            hideTypingIndicator();
+            addMessageToChat('assistant', `❌ Error: ${error.message}`);
+            showSystemAlert(`Error al conectar con el servidor: ${error.message}`, 'error');
+        } finally {
+            setProcessingState(false);
+            currentStreamingMessage = null;
+        }
+    }
+
+    // Función para obtener respuesta real de la API
+    async function getAIResponse(userMessage, fileId, chatHistory, useStreaming = true) {
+        try {
+            const response = await fetch('/api/v1/chat_with_document', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_id: parseInt(fileId),
+                    message: userMessage,
+                    chat_history: chatHistory,
+                    streaming: useStreaming
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+
+            if (useStreaming) {
+                // Procesar streaming
+                return await processStreamingResponse(response);
+            } else {
+                // Procesar respuesta completa
+                const data = await response.json();
+                return data.response;
+            }
+        } catch (error) {
+            console.error('Error en getAIResponse:', error);
+            throw error;
+        }
+    }
+
+    // Función para procesar respuesta en streaming
+    async function processStreamingResponse(response) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedResponse = '';
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    break;
+                }
+                
+                // Decodificar el chunk y agregar a la respuesta acumulada
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedResponse += chunk;
+                
+                // Actualizar el mensaje en tiempo real
+                updateStreamingMessage(accumulatedResponse);
+            }
+            
+            // Cuando termina el streaming, actualizar el historial
+            if (currentStreamingMessage) {
+                updateChatHistory(accumulatedResponse);
+            }
+            
+            return accumulatedResponse;
+        } finally {
+            reader.releaseLock();
+        }
+    }
+
+    // Función para actualizar mensaje en streaming
+    function updateStreamingMessage(content) {
+        if (currentStreamingMessage && currentStreamingMessage.querySelector('p:nth-child(2)')) {
+            currentStreamingMessage.querySelector('p:nth-child(2)').textContent = content;
+            scrollToBottom();
+        }
+    }
+
+    // Función para crear mensaje vacío del asistente (para streaming)
+    function createEmptyAssistantMessage() {
+        const messageElement = document.createElement('div');
+        messageElement.className = 'message assistant-message p-4';
+        messageElement.innerHTML = `
+            <div class="flex items-start">
+                <div class="bg-indigo-100 p-2 rounded-full mr-3">
+                    <i class="fas fa-robot text-indigo-600"></i>
+                </div>
+                <div class="flex-grow">
+                    <p class="font-semibold text-gray-800">Asistente IA</p>
+                    <p class="mt-1 text-gray-700"></p>
+                    <p class="mt-1 text-xs text-gray-500">
+                        ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                </div>
+            </div>
+        `;
+
+        messagesContainer.appendChild(messageElement);
+        scrollToBottom();
+        return messageElement;
+    }
+
+    // Función para obtener historial completo del chat
+    function getCompleteChatHistory() {
+        return chatHistory
+            .filter(turn => turn.answer !== null && turn.answer !== undefined)
+            .map(turn => ({
+                question: turn.question,
+                answer: turn.answer
+            }));
+    }
+
+    // Actualizar la función addMessageToChat para manejar mejor el historial
+    function addMessageToChat(role, content) {
+        const messageId = Date.now();
+
+        // Actualizar el historial de chat
+        if (role === 'user') {
+            chatHistory.push({ 
+                id: messageId,
+                question: content, 
+                answer: null,
+                timestamp: new Date().toISOString()
+            });
+            messageCount++;
+            updateMessageCount();
+        }
+
+        // Solo crear elemento HTML si es un mensaje de usuario o si no estamos en streaming
+        if (role === 'user') {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'} p-4`;
+            messageElement.innerHTML = `
+                <div class="flex items-start">
+                    <div class="${role === 'user' ? 'bg-white bg-opacity-20' : 'bg-indigo-100'} p-2 rounded-full mr-3">
+                        <i class="${role === 'user' ? 'fas fa-user text-white' : 'fas fa-robot text-indigo-600'}"></i>
+                    </div>
+                    <div class="flex-grow">
+                        <p class="font-semibold ${role === 'user' ? 'text-white' : 'text-gray-800'}">
+                            ${role === 'user' ? 'Tú' : 'Asistente IA'}
+                        </p>
+                        <p class="mt-1 ${role === 'user' ? 'text-white' : 'text-gray-700'}">${content}</p>
+                        <p class="mt-1 text-xs ${role === 'user' ? 'text-indigo-200' : 'text-gray-500'}">
+                            ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            // Ocultar mensaje de bienvenida después del primer mensaje
+            if (welcomeMessage && chatHistory.length === 1) {
+                welcomeMessage.style.display = 'none';
+            }
+
+            messagesContainer.appendChild(messageElement);
+            scrollToBottom();
+        }
+
+        // Guardar historial
+        saveChatHistory();
+    }
+
+    // Función para actualizar el historial cuando termina el streaming
+    function updateChatHistory(answer) {
+        if (chatHistory.length > 0) {
+            const lastMessage = chatHistory[chatHistory.length - 1];
+            if (lastMessage.answer === null) {
+                lastMessage.answer = answer;
+                saveChatHistory();
+            }
+        }
+    }
+
+    function showTypingIndicator() {
+        typingIndicator.classList.remove('hidden');
+        scrollToBottom();
+    }
+
+    function hideTypingIndicator() {
+        typingIndicator.classList.add('hidden');
+    }
+
+    function setProcessingState(processing) {
+        isProcessing = processing;
+        sendButton.disabled = processing;
+        messageInput.disabled = processing;
+        
+        if (processing) {
+            sendButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...';
+        } else {
+            sendButton.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Enviar';
+            messageInput.focus();
+        }
+    }
+
+    function scrollToBottom() {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Sistema de alertas
+    function showSystemAlert(message, type = 'info') {
+        systemAlertMessage.textContent = message;
+        systemAlert.className = '';
+        
+        switch(type) {
+            case 'error':
+                systemAlert.classList.add('error-message');
+                systemAlert.querySelector('i').className = 'fas fa-exclamation-triangle mr-3 text-lg';
+                break;
+            case 'success':
+                systemAlert.classList.add('success-message');
+                systemAlert.querySelector('i').className = 'fas fa-check-circle mr-3 text-lg';
+                break;
+            default:
+                systemAlert.classList.add('bg-blue-50', 'border', 'border-blue-200', 'text-blue-700');
+                systemAlert.querySelector('i').className = 'fas fa-info-circle mr-3 text-lg';
+        }
+        
+        systemAlert.classList.remove('hidden');
+        
+        // Auto-ocultar después de 5 segundos
+        setTimeout(() => {
+            systemAlert.classList.add('hidden');
+        }, 5000);
+    }
+
+    // Persistencia del chat (localStorage)
+    function saveChatHistory() {
+        const chatData = {
+            fileId: fileId,
+            history: chatHistory,
+            timestamp: new Date().toISOString()
+        };
+        localStorage.setItem(`chat_${fileId}`, JSON.stringify(chatData));
+    }
+
+    function loadChatHistory() {
+        const savedChat = localStorage.getItem(`chat_${fileId}`);
+        if (savedChat) {
+            const chatData = JSON.parse(savedChat);
+            chatHistory = chatData.history || [];
+            
+            // Recrear mensajes en la UI
+            chatHistory.forEach(message => {
+                if (message.question) {
+                    addMessageToChat('user', message.question);
+                }
+                if (message.answer) {
+                    addMessageToChat('assistant', message.answer);
+                }
+            });
+            
+            if (chatHistory.length > 0) {
+                welcomeMessage.style.display = 'none';
+            }
+            
+            updateMessageCount();
+        }
+    }
+
+    function clearChatHistory() {
+        if (confirm('¿Estás seguro de que quieres limpiar el historial de chat?')) {
+            localStorage.removeItem(`chat_${fileId}`);
+            chatHistory = [];
+            messagesContainer.innerHTML = '';
+            welcomeMessage.style.display = 'block';
+            messageCount = 0;
+            updateMessageCount();
+            showSystemAlert('Historial de chat limpiado correctamente', 'success');
+        }
+    }
+
+    function updateMessageCount() {
+        messageCountElement.textContent = messageCount;
+    }
+
+    // Test de conexión a la API
+    async function testAPIconnection() {
+        try {
+            const response = await fetch('/api/v1/chat_with_document/health');
+            if (response.ok) {
+                apiStatusElement.textContent = 'Conectado';
+                apiStatusElement.className = 'font-medium text-green-600';
+            } else {
+                throw new Error('API no responde correctamente');
+            }
+        } catch (error) {
+            apiStatusElement.textContent = 'Desconectado';
+            apiStatusElement.className = 'font-medium text-red-600';
+            showSystemAlert('Advertencia: No se pudo conectar con el servicio de IA', 'error');
+        }
+    }
+</script>
+{% endblock %}
