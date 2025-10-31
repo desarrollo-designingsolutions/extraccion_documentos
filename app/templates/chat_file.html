@@ -74,6 +74,10 @@
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
     }
+    .multi-file-banner {
+        background: linear-gradient(135deg, #9f7aea 0%, #6b46c1 100%);
+        color: white;
+    }
     .send-button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -86,6 +90,87 @@
         background: linear-gradient(135deg, #9ae6b4 0%, #68d391 100%);
         color: white;
     }
+    .info-message {
+        background: linear-gradient(135deg, #90cdf4 0%, #4299e1 100%);
+        color: white;
+    }
+    /* Estilos para el markdown renderizado */
+    .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+        font-weight: bold;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+    }
+    .markdown-content h1 { font-size: 1.5em; }
+    .markdown-content h2 { font-size: 1.3em; }
+    .markdown-content h3 { font-size: 1.1em; }
+    .markdown-content p {
+        margin-bottom: 0.8em;
+        line-height: 1.5;
+    }
+    .markdown-content ul, .markdown-content ol {
+        margin-left: 1.5em;
+        margin-bottom: 0.8em;
+    }
+    .markdown-content li {
+        margin-bottom: 0.3em;
+    }
+    .markdown-content code {
+        background-color: #e2e8f0;
+        padding: 0.1em 0.3em;
+        border-radius: 0.25em;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+    .markdown-content pre {
+        background-color: #1a202c;
+        color: #e2e8f0;
+        padding: 1em;
+        border-radius: 0.5em;
+        overflow-x: auto;
+        margin-bottom: 1em;
+    }
+    .markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+        color: inherit;
+    }
+    .markdown-content blockquote {
+        border-left: 4px solid #cbd5e0;
+        padding-left: 1em;
+        margin-left: 0;
+        color: #4a5568;
+        font-style: italic;
+    }
+    .markdown-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1em;
+    }
+    .markdown-content th, .markdown-content td {
+        border: 1px solid #cbd5e0;
+        padding: 0.5em;
+        text-align: left;
+    }
+    .markdown-content th {
+        background-color: #edf2f7;
+        font-weight: bold;
+    }
+    .files-list {
+        max-height: 150px;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+    .file-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        margin-bottom: 5px;
+    }
+    .file-item:last-child {
+        margin-bottom: 0;
+    }
 </style>
 {% endblock %}
 
@@ -96,7 +181,7 @@
         <h1 class="text-3xl font-bold text-gray-800 flex items-center">
             <i class="fas fa-comments mr-3 text-indigo-600"></i>Chat con Documento
         </h1>
-        <p class="text-gray-600 mt-2">Interactúa con tu documento usando inteligencia artificial</p>
+        <p class="text-gray-600 mt-2">Interactúa con tus documentos usando inteligencia artificial</p>
     </div>
 
     <!-- Información del archivo -->
@@ -112,6 +197,10 @@
             <button id="backToList" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-4 rounded-lg flex items-center transition-all">
                 <i class="fas fa-arrow-left mr-2"></i>Volver a la lista
             </button>
+        </div>
+        <!-- Lista de archivos para modo múltiple -->
+        <div id="multipleFilesList" class="files-list hidden mt-3">
+            <!-- Los archivos se cargarán aquí dinámicamente -->
         </div>
     </div>
 
@@ -152,7 +241,7 @@
                         </button>
                         <button class="suggestion-btn w-full text-left bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 p-3 rounded-lg border border-gray-200 transition-all flex items-start">
                             <i class="fas fa-play text-indigo-500 mt-1 mr-2 text-sm"></i>
-                            <span>Extraer información importante</span>
+                            <span>Comparar información entre documentos</span>
                         </button>
                     </div>
                 </div>
@@ -173,7 +262,7 @@
                         </div>
                         <div class="flex justify-between">
                             <span>Contexto:</span>
-                            <span class="font-medium">Documento completo</span>
+                            <span id="contextInfo" class="font-medium">Documento completo</span>
                         </div>
                         <div class="flex justify-between">
                             <span>Temperatura:</span>
@@ -203,6 +292,10 @@
                         <div class="flex justify-between">
                             <span>Fragmentos usados:</span>
                             <span id="chunksUsed" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Archivos activos:</span>
+                            <span id="activeFiles" class="font-medium">1</span>
                         </div>
                         <div class="flex justify-between">
                             <span>Última respuesta:</span>
@@ -236,8 +329,10 @@
                                 </div>
                                 <div>
                                     <p class="font-semibold text-gray-800">Asistente IA</p>
-                                    <p class="mt-1">¡Hola! Soy tu asistente de IA. Puedo ayudarte a analizar y entender el contenido de este documento. ¿En qué puedo asistirte?</p>
-                                    <p class="mt-2 text-sm text-gray-600">Puedes hacer preguntas sobre el contenido, solicitar resúmenes o extraer información específica.</p>
+                                    <div class="markdown-content">
+                                        <p class="mt-1">¡Hola! Soy tu asistente de IA. Puedo ayudarte a analizar y entender el contenido de tus documentos. ¿En qué puedo asistirte?</p>
+                                        <p class="mt-2 text-sm text-gray-600">Puedes hacer preguntas sobre el contenido, solicitar resúmenes, comparar información entre documentos o extraer información específica.</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -287,16 +382,28 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Incluir marked.js para renderizar markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
+    // Configurar marked para un renderizado seguro
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        sanitize: false // Usamos DOMPurify después para sanitizar
+    });
+
     // Obtener parámetros de la URL
     const urlParams = new URLSearchParams(window.location.search);
     const fileId = urlParams.get('file_id');
     const fileName = urlParams.get('file_name');
+    const fileIdsParam = urlParams.get('file_ids');
+    const fileNamesParam = urlParams.get('file_names');
 
     // Elementos del DOM
     const fileInfoElement = document.getElementById('fileInfo');
     const fileNameElement = document.getElementById('fileName');
     const fileIdElement = document.getElementById('fileIdValue');
+    const multipleFilesList = document.getElementById('multipleFilesList');
     const messagesContainer = document.getElementById('messagesContainer');
     const chatForm = document.getElementById('chatForm');
     const messageInput = document.getElementById('messageInput');
@@ -310,14 +417,18 @@
     const systemAlertMessage = document.getElementById('systemAlertMessage');
     const messageCountElement = document.getElementById('messageCount');
     const chunksUsedElement = document.getElementById('chunksUsed');
+    const activeFilesElement = document.getElementById('activeFiles');
     const lastResponseTimeElement = document.getElementById('lastResponseTime');
     const apiStatusElement = document.getElementById('apiStatus');
+    const contextInfoElement = document.getElementById('contextInfo');
 
     // Estado del chat
     let chatHistory = [];
     let isProcessing = false;
     let currentStreamingMessage = null;
     let messageCount = 0;
+    let currentFileIds = [];
+    let currentFileNames = [];
 
     // Inicializar la aplicación
     document.addEventListener('DOMContentLoaded', function() {
@@ -327,18 +438,71 @@
     });
 
     function initializeChat() {
-        // Mostrar información del archivo
-        if (fileId && fileName) {
-            fileNameElement.textContent = decodeURIComponent(fileName);
-            fileIdElement.textContent = fileId;
-            showSystemAlert(`Chat iniciado con el documento: "${decodeURIComponent(fileName)}"`, 'success');
+        // Obtener parámetros para múltiples archivos
+        let fileIds = [];
+        let fileNames = [];
+        
+        if (fileIdsParam) {
+            // Modo múltiples archivos
+            fileIds = fileIdsParam.split(',').map(id => parseInt(id.trim()));
+            fileNames = fileNamesParam ? fileNamesParam.split(',').map(name => decodeURIComponent(name)) : [];
+            currentFileIds = fileIds;
+            currentFileNames = fileNames;
+            
+            if (fileIds.length > 1) {
+                // Mostrar información de múltiples archivos
+                fileNameElement.textContent = `${fileIds.length} documentos seleccionados`;
+                fileIdElement.textContent = fileIds.join(', ');
+                fileInfoElement.classList.add('multi-file-banner');
+                
+                // Mostrar lista de documentos
+                const filesListHTML = fileNames.map((name, index) => 
+                    `<div class="file-item">
+                        <i class="fas fa-file-pdf mr-2 text-white opacity-80"></i>
+                        <span class="text-white opacity-90">${name} (ID: ${fileIds[index]})</span>
+                    </div>`
+                ).join('');
+                
+                multipleFilesList.innerHTML = filesListHTML;
+                multipleFilesList.classList.remove('hidden');
+                
+                // Actualizar información de contexto
+                contextInfoElement.textContent = `${fileIds.length} documentos`;
+                activeFilesElement.textContent = fileIds.length;
+                
+                showSystemAlert(`Chat iniciado con ${fileIds.length} documentos`, 'info');
+            } else {
+                // Modo un solo archivo (compatibilidad)
+                fileNameElement.textContent = fileNames[0] || `Documento ${fileIds[0]}`;
+                fileIdElement.textContent = fileIds[0];
+                currentFileIds = [fileIds[0]];
+                currentFileNames = [fileNames[0]];
+                activeFilesElement.textContent = '1';
+                showSystemAlert(`Chat iniciado con: "${fileNames[0]}"`, 'success');
+            }
         } else {
-            fileNameElement.textContent = 'Error: No se proporcionó información del archivo';
-            fileInfoElement.classList.add('error-message');
-            showSystemAlert('Error: No se encontró información del archivo', 'error');
+            // Modo antiguo (compatibilidad)
+            const singleFileId = urlParams.get('file_id');
+            const singleFileName = urlParams.get('file_name');
+            
+            if (singleFileId && singleFileName) {
+                fileIds = [parseInt(singleFileId)];
+                fileNames = [decodeURIComponent(singleFileName)];
+                currentFileIds = fileIds;
+                currentFileNames = fileNames;
+                fileNameElement.textContent = decodeURIComponent(singleFileName);
+                fileIdElement.textContent = singleFileId;
+                activeFilesElement.textContent = '1';
+                showSystemAlert(`Chat iniciado con: "${decodeURIComponent(singleFileName)}"`, 'success');
+            } else {
+                fileNameElement.textContent = 'Error: No se proporcionó información del archivo';
+                fileInfoElement.classList.add('error-message');
+                showSystemAlert('Error: No se encontró información del archivo', 'error');
+                return;
+            }
         }
 
-        // Cargar historial del chat si existe
+        // Cargar historial del chat
         loadChatHistory();
         updateMessageCount();
     }
@@ -396,6 +560,17 @@
         });
     }
 
+    // Función para renderizar markdown a HTML
+    function renderMarkdown(markdownText) {
+        try {
+            return marked.parse(markdownText);
+        } catch (error) {
+            console.error('Error renderizando markdown:', error);
+            // Si hay error, devolver el texto original escapado
+            return markdownText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+    }
+
     async function sendMessage() {
         const message = messageInput.value.trim();
         if (!message || isProcessing) return;
@@ -419,7 +594,7 @@
 
         try {
             // Llamar a la API real
-            const response = await getAIResponse(message, fileId, getCompleteChatHistory(), true);
+            const response = await getAIResponse(message, currentFileIds, getCompleteChatHistory(), true);
             
             // Ocultar indicador de typing
             hideTypingIndicator();
@@ -439,19 +614,21 @@
     }
 
     // Función para obtener respuesta real de la API
-    async function getAIResponse(userMessage, fileId, chatHistory, useStreaming = true) {
+    async function getAIResponse(userMessage, fileIds, chatHistory, useStreaming = true) {
         try {
+            const payload = {
+                file_ids: fileIds,  // Usar array de IDs
+                message: userMessage,
+                chat_history: chatHistory,
+                streaming: useStreaming
+            };
+
             const response = await fetch('/api/v1/chat_with_document', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    file_id: parseInt(fileId),
-                    message: userMessage,
-                    chat_history: chatHistory,
-                    streaming: useStreaming
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -464,6 +641,15 @@
             } else {
                 // Procesar respuesta completa
                 const data = await response.json();
+                
+                // Actualizar estadísticas de chunks
+                if (data.chunks_utilizados) {
+                    chunksUsedElement.textContent = data.chunks_utilizados;
+                }
+                if (data.archivos_utilizados) {
+                    activeFilesElement.textContent = `${data.archivos_utilizados}/${data.total_archivos}`;
+                }
+                
                 return data.response;
             }
         } catch (error) {
@@ -507,8 +693,10 @@
 
     // Función para actualizar mensaje en streaming
     function updateStreamingMessage(content) {
-        if (currentStreamingMessage && currentStreamingMessage.querySelector('p:nth-child(2)')) {
-            currentStreamingMessage.querySelector('p:nth-child(2)').textContent = content;
+        if (currentStreamingMessage && currentStreamingMessage.querySelector('.streaming-content')) {
+            // Renderizar markdown a HTML
+            const htmlContent = renderMarkdown(content);
+            currentStreamingMessage.querySelector('.streaming-content').innerHTML = htmlContent;
             scrollToBottom();
         }
     }
@@ -524,7 +712,7 @@
                 </div>
                 <div class="flex-grow">
                     <p class="font-semibold text-gray-800">Asistente IA</p>
-                    <p class="mt-1 text-gray-700"></p>
+                    <div class="markdown-content streaming-content mt-1 text-gray-700"></div>
                     <p class="mt-1 text-xs text-gray-500">
                         ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -567,6 +755,13 @@
         if (role === 'user') {
             const messageElement = document.createElement('div');
             messageElement.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'} p-4`;
+            
+            let contentHtml = content;
+            if (role === 'assistant') {
+                // Renderizar markdown para mensajes del asistente
+                contentHtml = renderMarkdown(content);
+            }
+
             messageElement.innerHTML = `
                 <div class="flex items-start">
                     <div class="${role === 'user' ? 'bg-white bg-opacity-20' : 'bg-indigo-100'} p-2 rounded-full mr-3">
@@ -576,7 +771,10 @@
                         <p class="font-semibold ${role === 'user' ? 'text-white' : 'text-gray-800'}">
                             ${role === 'user' ? 'Tú' : 'Asistente IA'}
                         </p>
-                        <p class="mt-1 ${role === 'user' ? 'text-white' : 'text-gray-700'}">${content}</p>
+                        ${role === 'user' 
+                            ? `<p class="mt-1 text-white">${content}</p>` 
+                            : `<div class="markdown-content mt-1 text-gray-700">${contentHtml}</div>`
+                        }
                         <p class="mt-1 text-xs ${role === 'user' ? 'text-indigo-200' : 'text-gray-500'}">
                             ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                         </p>
@@ -648,6 +846,10 @@
                 systemAlert.classList.add('success-message');
                 systemAlert.querySelector('i').className = 'fas fa-check-circle mr-3 text-lg';
                 break;
+            case 'info':
+                systemAlert.classList.add('info-message');
+                systemAlert.querySelector('i').className = 'fas fa-info-circle mr-3 text-lg';
+                break;
             default:
                 systemAlert.classList.add('bg-blue-50', 'border', 'border-blue-200', 'text-blue-700');
                 systemAlert.querySelector('i').className = 'fas fa-info-circle mr-3 text-lg';
@@ -664,15 +866,16 @@
     // Persistencia del chat (localStorage)
     function saveChatHistory() {
         const chatData = {
-            fileId: fileId,
+            fileIds: currentFileIds,
+            fileNames: currentFileNames,
             history: chatHistory,
             timestamp: new Date().toISOString()
         };
-        localStorage.setItem(`chat_${fileId}`, JSON.stringify(chatData));
+        localStorage.setItem(`chat_${currentFileIds.join('_')}`, JSON.stringify(chatData));
     }
 
     function loadChatHistory() {
-        const savedChat = localStorage.getItem(`chat_${fileId}`);
+        const savedChat = localStorage.getItem(`chat_${currentFileIds.join('_')}`);
         if (savedChat) {
             const chatData = JSON.parse(savedChat);
             chatHistory = chatData.history || [];
@@ -697,7 +900,7 @@
 
     function clearChatHistory() {
         if (confirm('¿Estás seguro de que quieres limpiar el historial de chat?')) {
-            localStorage.removeItem(`chat_${fileId}`);
+            localStorage.removeItem(`chat_${currentFileIds.join('_')}`);
             chatHistory = [];
             messagesContainer.innerHTML = '';
             welcomeMessage.style.display = 'block';

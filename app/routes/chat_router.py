@@ -16,6 +16,9 @@ router = APIRouter()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("chat_router")
 
+# Constantes
+MAX_FILES_PER_CHAT = 10  # Límite máximo de archivos por chat
+
 # Reutilizar funciones auxiliares del responder_pregunta.py
 def dict_from_row(row) -> Dict:
     try:
@@ -56,23 +59,63 @@ async def get_cached_embedding(redis: Redis, question: str) -> List[float] | Non
         await redis.set(cache_key, json.dumps(embedding), ex=3600)
     return embedding
 
-async def fetch_chunks(db: AsyncSession, embedding: List[float], file_id: int) -> List[Dict]:
+async def validate_files_exist(db: AsyncSession, file_ids: List[int]) -> List[Dict]:
+    """Validar que todos los archivos existen y obtener sus nombres"""
+    if not file_ids:
+        return []
+    
+    query_archivo = text("SELECT id, name FROM files WHERE id IN :ids")
+    archivo_result = db.execute(query_archivo, {"ids": tuple(file_ids)})
+    archivos = [dict_from_row(row) for row in archivo_result.fetchall()]
+    
+    if len(archivos) != len(file_ids):
+        found_ids = {a['id'] for a in archivos}
+        not_found = set(file_ids) - found_ids
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Archivos no encontrados: {not_found}"
+        )
+    
+    return archivos
+
+async def fetch_chunks_multiple_files(
+    db: AsyncSession, 
+    embedding: List[float], 
+    file_ids: List[int],
+    chunks_per_file: int = 10
+) -> List[Dict]:
+    """Buscar chunks relevantes en múltiples archivos"""
     embedding_str = f"[{','.join(map(str, embedding))}]"
     
     query = text(
         """
-            SELECT ca.id, ca.content, ca.embedding <=> CAST(:query_emb AS vector) AS distancia
+        WITH ranked_chunks AS (
+            SELECT 
+                ca.id, 
+                ca.content, 
+                ca.files_id,
+                ca.embedding <=> CAST(:query_emb AS vector) AS distancia,
+                ROW_NUMBER() OVER (PARTITION BY ca.files_id ORDER BY ca.embedding <=> CAST(:query_emb AS vector)) as rank
             FROM files_chunks ca
-            WHERE ca.files_id = :id
-            ORDER BY distancia ASC
-            LIMIT 20
+            WHERE ca.files_id IN :ids
+        )
+        SELECT id, content, files_id, distancia
+        FROM ranked_chunks
+        WHERE rank <= :chunks_per_file
+        ORDER BY distancia ASC
+        LIMIT 50
         """
     )
+    
     try:
-        result = db.execute(query, {"query_emb": embedding_str, "id": file_id})
-        return result.fetchall()
+        result = db.execute(query, {
+            "query_emb": embedding_str, 
+            "ids": tuple(file_ids),
+            "chunks_per_file": chunks_per_file
+        })
+        return [dict_from_row(row) for row in result.fetchall()]
     except Exception:
-        logger.exception("Error en búsqueda vectorial")
+        logger.exception("Error en búsqueda vectorial múltiple")
         raise HTTPException(status_code=500, detail="Error en búsqueda por vector")
 
 async def stream_llm_response(request: Request, context: str, question: str, chat_history: List[Dict] = None) -> AsyncGenerator[str, None]:
@@ -83,19 +126,19 @@ async def stream_llm_response(request: Request, context: str, question: str, cha
     messages = [
         {
             "role": "system",
-            "content": f"""Eres un asistente especializado en analizar documentos. 
-            
-INSTRUCCIONES:
-- Responde ÚNICAMENTE basándote en la información proporcionada en el CONTEXTO del documento.
-- Si la información no está en el CONTEXTO, di claramente que no tienes esa información.
-- Sé preciso y conciso en tus respuestas.
-- Si el usuario pregunta sobre información que requiere análisis complejo, desglosa tu respuesta en partes.
-- Mantén un tono profesional pero amigable.
+            "content": f"""Eres un asistente especializado en analizar documentos.             
+                INSTRUCCIONES:
+                - Responde ÚNICAMENTE basándote en la información proporcionada en el CONTEXTO del documento.
+                - Si la información no está en el CONTEXTO, di claramente que no tienes esa información.
+                - Sé preciso y conciso en tus respuestas.
+                - Si el usuario pregunta sobre información que requiere análisis complejo, desglosa tu respuesta en partes.
+                - Mantén un tono profesional pero amigable.
+                - Cuando uses información de diferentes documentos, indica claramente de cuál documento proviene cada información.
 
-CONTEXTO DEL DOCUMENTO:
-{context}
+                CONTEXTO DEL DOCUMENTO:
+                {context}
 
-Recuerda: Solo usa la información del CONTEXTO proporcionado."""
+                Recuerda: Solo usa la información del CONTEXTO proporcionado."""
         }
     ]
     
@@ -137,8 +180,8 @@ async def generate_full_response(request: Request, context: str, question: str, 
             "role": "system",
             "content": f"""Eres un asistente especializado en analizar documentos. Responde ÚNICAMENTE basándote en la información proporcionada en el CONTEXTO del documento.
 
-CONTEXTO DEL DOCUMENTO:
-{context}"""
+            CONTEXTO DEL DOCUMENTO:
+            {context}"""
         }
     ]
     
@@ -174,26 +217,40 @@ async def chat_with_document(
 ):
     """
     Endpoint principal para chat con documentos
-    Soporta streaming y respuestas completas
+    Soporta un solo archivo o múltiples archivos
     """
     try:
+        # Soporte para file_id (individual) y file_ids (múltiple)
         file_id = data.get("file_id")
+        file_ids = data.get("file_ids", [])
         question = data.get("message")
         chat_history = data.get("chat_history", [])
         use_streaming = data.get("streaming", True)
         
-        if not file_id or not question:
-            raise HTTPException(status_code=400, detail="Faltan file_id o message")
+        # Determinar lista de archivos
+        final_file_ids = []
+        if file_ids:
+            if isinstance(file_ids, list):
+                final_file_ids = file_ids
+            else:
+                final_file_ids = [file_ids]
+        elif file_id:
+            final_file_ids = [file_id]
         
-        logger.info(f"Iniciando chat para archivo {file_id}: {question[:100]}...")
+        if not final_file_ids or not question:
+            raise HTTPException(status_code=400, detail="Faltan file_id/file_ids o message")
         
-        # Verificar que el archivo existe
-        query_archivo = text("SELECT id, name FROM files WHERE id = :id")
-        archivo_result = db.execute(query_archivo, {"id": file_id})
-        archivo = archivo_result.fetchone()
+        # Validar límite de archivos
+        if len(final_file_ids) > MAX_FILES_PER_CHAT:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Máximo {MAX_FILES_PER_CHAT} archivos permitidos para chat simultáneo"
+            )
         
-        if not archivo:
-            raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        logger.info(f"Iniciando chat para archivos {final_file_ids}: {question[:100]}...")
+        
+        # Validar que los archivos existen
+        archivos = await validate_files_exist(db, final_file_ids)
         
         # Generar embedding para la pregunta
         redis: Redis = request.app.state.redis
@@ -201,15 +258,23 @@ async def chat_with_document(
         if not embedding:
             raise HTTPException(status_code=400, detail="No se pudo generar embedding para la pregunta")
         
-        # Buscar chunks relevantes
-        results = await fetch_chunks(db, embedding, file_id)
+        # Buscar chunks relevantes en todos los documentos
+        results = await fetch_chunks_multiple_files(db, embedding, final_file_ids)
         if not results:
-            raise HTTPException(status_code=404, detail="No se encontraron fragmentos relevantes en el documento")
+            raise HTTPException(
+                status_code=404, 
+                detail="No se encontraron fragmentos relevantes en los documentos"
+            )
         
         # Procesar chunks y aplicar reranking
         chunks_candidatos = [
-            {"id": d.get("id"), "content": d.get("content", ""), "distancia": normalize_distance(d.get("distancia", 1.0))}
-            for r in results if (d := dict_from_row(r))
+            {
+                "id": d.get("id"), 
+                "content": d.get("content", ""), 
+                "files_id": d.get("files_id"),
+                "distancia": normalize_distance(d.get("distancia", 1.0))
+            }
+            for d in results
         ]
         
         # Aplicar reranking
@@ -218,7 +283,6 @@ async def chat_with_document(
             scores = await predict_reranker(request, pares, batch_size=8)
         except Exception:
             logger.exception("Error en reranking")
-            # Continuar sin reranking en caso de error
             scores = [1.0] * len(chunks_candidatos)
         
         for i, chunk in enumerate(chunks_candidatos):
@@ -227,29 +291,39 @@ async def chat_with_document(
         
         # Seleccionar mejores chunks
         chunks_ordenados = sorted(chunks_candidatos, key=lambda x: x["score_combinado"], reverse=True)
-        chunks_finales = [c for c in chunks_ordenados if c["score_combinado"] > 0.3] or chunks_ordenados[:3]
+        chunks_finales = [c for c in chunks_ordenados if c["score_combinado"] > 0.3] or chunks_ordenados[:5]
         
-        # Construir contexto
-        contexto = "\n\n".join([f"--- Fragmento {i+1} ---\n{chunk['content']}" for i, chunk in enumerate(chunks_finales[:3])])
+        # Construir contexto con información de origen
+        contexto_parts = []
+        for i, chunk in enumerate(chunks_finales[:5]):
+            # Encontrar nombre del archivo para este chunk
+            archivo_nombre = next(
+                (a['name'] for a in archivos if a['id'] == chunk['files_id']), 
+                f"Documento {chunk['files_id']}"
+            )
+            contexto_parts.append(
+                f"--- Fragmento {i+1} (de {archivo_nombre}) ---\n{chunk['content']}"
+            )
         
-        logger.info(f"Contexto preparado con {len(chunks_finales)} fragmentos para archivo {file_id}")
+        contexto = "\n\n".join(contexto_parts)
+        
+        logger.info(f"Contexto preparado con {len(chunks_finales)} fragmentos de {len(archivos)} archivos")
         
         # Preparar respuesta
         if use_streaming:
-            # Devolver streaming response
             return StreamingResponse(
                 stream_llm_response(request, contexto, question, chat_history),
                 media_type="text/plain"
             )
         else:
-            # Devolver respuesta completa
             respuesta = await generate_full_response(request, contexto, question, chat_history)
             return {
                 "response": respuesta,
                 "chunks_utilizados": len(chunks_finales),
-                "distancia_promedio": sum(c["distancia"] for c in chunks_finales) / len(chunks_finales) if chunks_finales else 0,
-                "file_id": file_id,
-                "file_name": archivo.name if archivo else "Desconocido"
+                "archivos_utilizados": len(set(c['files_id'] for c in chunks_finales)),
+                "total_archivos": len(archivos),
+                "file_ids": final_file_ids,
+                "file_names": [a['name'] for a in archivos]
             }
             
     except HTTPException:
