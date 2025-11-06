@@ -54,3 +54,32 @@ class InvoiceAudits(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+# Agregar al final de models.py
+class TemporaryFiles(Base):
+    __tablename__ = "temporary_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True, nullable=False)
+    name = Column(String, index=True, nullable=False)
+    original_filename = Column(String, nullable=False)
+    size = Column(BigInteger, nullable=False)
+    text_extracted = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    
+    # Relación con chunks temporales
+    chunks = relationship("TemporaryFilesChunks", back_populates="temporary_file", cascade="all, delete-orphan")
+
+class TemporaryFilesChunks(Base):
+    __tablename__ = "temporary_files_chunks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    temporary_files_id = Column(Integer, ForeignKey('temporary_files.id'))
+    content = Column(Text, nullable=False)
+    chunk_number = Column(Integer, nullable=False)
+    embedding = Column(Vector(3072))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relación
+    temporary_file = relationship("TemporaryFiles", back_populates="chunks")

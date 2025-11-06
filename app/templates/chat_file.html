@@ -187,14 +187,20 @@
     <!-- Información del archivo -->
     <div id="fileInfo" class="file-info-banner rounded-xl p-4 mb-6 shadow-lg">
         <div class="flex items-center justify-between">
-            <div class="flex items-center">
-                <i class="fas fa-file-pdf text-white text-2xl mr-3"></i>
-                <div>
-                    <h3 id="fileName" class="text-xl font-bold text-white">Cargando información del documento...</h3>
-                    <p id="fileDetails" class="text-indigo-100">ID: <span id="fileIdValue">-</span></p>
+            <div class="flex items-center justify-between w-full">
+                <div class="flex items-center">
+                    <i class="fas fa-file-pdf text-white text-2xl mr-3"></i>
+                    <div>
+                        <h3 id="fileName" class="text-xl font-bold text-white">Cargando información del documento...</h3>
+                        <p id="fileDetails" class="text-indigo-100">ID: <span id="fileIdValue">-</span></p>
+                    </div>
                 </div>
+                <button id="singleFileOpenBtn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center transition-all ml-4">
+                    <i class="fas fa-external-link-alt mr-2"></i>Ver
+                </button>
             </div>
-            <button id="backToList" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-4 rounded-lg flex items-center transition-all">
+
+            <button id="backToList" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2.5 px-4 rounded-lg flex items-center transition-all ml-4" style="width: 14vw;">
                 <i class="fas fa-arrow-left mr-2"></i>Volver a la lista
             </button>
         </div>
@@ -421,6 +427,7 @@
     const lastResponseTimeElement = document.getElementById('lastResponseTime');
     const apiStatusElement = document.getElementById('apiStatus');
     const contextInfoElement = document.getElementById('contextInfo');
+    const singleFileOpenBtn = document.getElementById('singleFileOpenBtn');
 
     // Estado del chat
     let chatHistory = [];
@@ -455,11 +462,23 @@
                 fileIdElement.textContent = fileIds.join(', ');
                 fileInfoElement.classList.add('multi-file-banner');
                 
-                // Mostrar lista de documentos
+                // Ocultar botón individual y mostrar lista múltiple
+                singleFileOpenBtn.classList.add('hidden');
+                
+                // Mostrar lista de documentos con botones "Abrir"
                 const filesListHTML = fileNames.map((name, index) => 
                     `<div class="file-item">
-                        <i class="fas fa-file-pdf mr-2 text-white opacity-80"></i>
-                        <span class="text-white opacity-90">${name} (ID: ${fileIds[index]})</span>
+                        <div class="flex justify-between items-center w-full">
+                            <div class="flex items-center">
+                                <i class="fas fa-file-pdf mr-2 text-white opacity-80"></i>
+                                <span class="text-white opacity-90">${name} (ID: ${fileIds[index]})</span>
+                            </div>
+                            <button class="open-file-btn bg-green-600 hover:bg-green-700 text-white text-xs font-medium py-1.5 px-3 rounded-lg flex items-center transition-all ml-2" 
+                                    data-id="${fileIds[index]}" 
+                                    data-name="${name}">
+                                <i class="fas fa-external-link-alt mr-1"></i>Abrir
+                            </button>
+                        </div>
                     </div>`
                 ).join('');
                 
@@ -473,12 +492,7 @@
                 showSystemAlert(`Chat iniciado con ${fileIds.length} documentos`, 'info');
             } else {
                 // Modo un solo archivo (compatibilidad)
-                fileNameElement.textContent = fileNames[0] || `Documento ${fileIds[0]}`;
-                fileIdElement.textContent = fileIds[0];
-                currentFileIds = [fileIds[0]];
-                currentFileNames = [fileNames[0]];
-                activeFilesElement.textContent = '1';
-                showSystemAlert(`Chat iniciado con: "${fileNames[0]}"`, 'success');
+                setupSingleFileMode(fileIds[0], fileNames[0]);
             }
         } else {
             // Modo antiguo (compatibilidad)
@@ -486,17 +500,11 @@
             const singleFileName = urlParams.get('file_name');
             
             if (singleFileId && singleFileName) {
-                fileIds = [parseInt(singleFileId)];
-                fileNames = [decodeURIComponent(singleFileName)];
-                currentFileIds = fileIds;
-                currentFileNames = fileNames;
-                fileNameElement.textContent = decodeURIComponent(singleFileName);
-                fileIdElement.textContent = singleFileId;
-                activeFilesElement.textContent = '1';
-                showSystemAlert(`Chat iniciado con: "${decodeURIComponent(singleFileName)}"`, 'success');
+                setupSingleFileMode(parseInt(singleFileId), decodeURIComponent(singleFileName));
             } else {
                 fileNameElement.textContent = 'Error: No se proporcionó información del archivo';
                 fileInfoElement.classList.add('error-message');
+                singleFileOpenBtn.classList.add('hidden');
                 showSystemAlert('Error: No se encontró información del archivo', 'error');
                 return;
             }
@@ -505,6 +513,24 @@
         // Cargar historial del chat
         loadChatHistory();
         updateMessageCount();
+    }
+
+    function setupSingleFileMode(fileId, fileName) {
+        currentFileIds = [fileId];
+        currentFileNames = [fileName];
+        fileNameElement.textContent = fileName;
+        fileIdElement.textContent = fileId;
+        activeFilesElement.textContent = '1';
+        
+        // Mostrar botón individual y ocultar lista múltiple
+        singleFileOpenBtn.classList.remove('hidden');
+        multipleFilesList.classList.add('hidden');
+        
+        // Configurar el botón individual
+        singleFileOpenBtn.setAttribute('data-id', fileId);
+        singleFileOpenBtn.setAttribute('data-name', fileName);
+        
+        showSystemAlert(`Chat iniciado con: "${fileName}"`, 'success');
     }
 
     function setupEventListeners() {
@@ -558,8 +584,91 @@
         clearChatButton.addEventListener('click', function() {
             clearChatHistory();
         });
+
+        // Botón individual de abrir documento
+        singleFileOpenBtn.addEventListener('click', function() {
+            const fileId = parseInt(this.getAttribute('data-id'));
+            const fileName = this.getAttribute('data-name');
+            openDocumentInModal(fileId, fileName, this);
+        });
+
+        // Botones múltiples de abrir documento
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.open-file-btn')) {
+                const button = e.target.closest('.open-file-btn');
+                const fileId = parseInt(button.getAttribute('data-id'));
+                const fileName = button.getAttribute('data-name');
+                openDocumentInModal(fileId, fileName, button);
+            }
+        });
     }
 
+    // Función para abrir documento en modal
+    async function openDocumentInModal(fileId, fileName, button) {
+        const originalContent = button.innerHTML;
+        
+        try {
+            // Mostrar spinner
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Cargando...';
+            button.disabled = true;
+            
+            // Obtener URL del archivo
+            const fileUrl = await getFileUrl(fileId);
+            
+            // Restaurar botón
+            if (button.id === 'singleFileOpenBtn') {
+                button.innerHTML = '<i class="fas fa-external-link-alt mr-2"></i>Ver';
+            } else {
+                button.innerHTML = '<i class="fas fa-external-link-alt mr-1"></i>Abrir';
+            }
+            button.disabled = false;
+            
+            // Abrir en nueva pestaña
+            window.open(fileUrl, '_blank');
+            
+        } catch (error) {
+            // Restaurar botón en caso de error
+            if (button.id === 'singleFileOpenBtn') {
+                button.innerHTML = '<i class="fas fa-external-link-alt mr-2"></i>Ver';
+            } else {
+                button.innerHTML = '<i class="fas fa-external-link-alt mr-1"></i>Abrir';
+            }
+            button.disabled = false;
+            
+            console.error('Error al abrir documento:', error);
+            showSystemAlert(`Error al abrir documento: ${error.message}`, 'error');
+        }
+    }
+
+    // Función para obtener URL del archivo (similar a la de list_files.html)
+    async function getFileUrl(fileId) {
+        try {
+            const response = await fetch('http://localhost:8002/api/v1/get_url_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_id: fileId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            if (data.code === 200 && data.url) {
+                return data.url;
+            } else {
+                throw new Error("Formato de respuesta inválido");
+            }
+        } catch (error) {
+            throw new Error(`Error al obtener URL: ${error.message}`);
+        }
+    }
+
+    // ... (el resto del código JavaScript se mantiene igual)
     // Función para renderizar markdown a HTML
     function renderMarkdown(markdownText) {
         try {

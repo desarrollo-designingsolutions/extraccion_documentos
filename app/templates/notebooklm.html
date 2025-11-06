@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block title %}NotebookLM - Chat con Documentos Temporales{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-message-user {
+        background-color: #3b82f6;
+        color: white;
+        border-radius: 1rem 1rem 0.25rem 1rem;
+        margin-left: 2rem;
+    }
+    .chat-message-assistant {
+        background-color: #f3f4f6;
+        color: #374151;
+        border-radius: 1rem 1rem 1rem 0.25rem;
+        margin-right: 2rem;
+    }
+    .file-card {
+        transition: all 0.3s ease;
+    }
+    .file-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+    .upload-area {
+        border: 2px dashed #d1d5db;
+        transition: all 0.3s ease;
+    }
+    .upload-area.dragover {
+        border-color: #3b82f6;
+        background-color: #eff6ff;
+    }
+    .typing-indicator {
+        display: inline-block;
+    }
+    .typing-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #9ca3af;
+        margin: 0 2px;
+        animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typing {
+        0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div class="container mx-auto px-4 max-w-7xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-brain mr-3 text-indigo-600"></i>NotebookLM
+            </h1>
+            <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                Sube documentos y chatea con ellos de forma temporal. Analiza múltiples archivos simultáneamente con IA.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Sidebar - Upload y gestión de archivos -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Panel de subida -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-cloud-upload-alt mr-2 text-indigo-600"></i>
+                        Subir Documentos
+                    </h3>
+                    
+                    <!-- Área de dropzone -->
+                    <div id="uploadArea" 
+                         class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer transition-all duration-300 hover:border-indigo-400 hover:bg-indigo-50 mb-4">
+                        <i class="fas fa-file-alt text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-600 mb-2">Arrastra archivos aquí o haz clic para seleccionar</p>
+                        <p class="text-sm text-gray-500">PDF, imágenes, Word, Excel, texto</p>
+                        <input type="file" id="fileInput" multiple class="hidden" accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx">
+                    </div>
+
+                    <!-- Información de sesión -->
+                    <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-blue-800">Sesión ID:</span>
+                            <span id="sessionId" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-blue-700">Archivos:</span>
+                            <span id="fileCount" class="text-sm font-semibold text-blue-800">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Botones de acción -->
+                    <div class="space-y-3">
+                        <button id="processBtn" 
+                                class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                            <i class="fas fa-cog mr-2"></i>
+                            Procesar Archivos
+                        </button>
+                        <button id="clearSessionBtn" 
+                                class="w-full bg-red-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center justify-center">
+                            <i class="fas fa-trash mr-2"></i>
+                            Limpiar Sesión
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lista de archivos -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-files mr-2 text-green-600"></i>
+                        Archivos Subidos
+                    </h3>
+                    <div id="filesList" class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                        <p class="text-gray-500 text-center py-4">No hay archivos subidos</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Área principal de chat -->
+            <div class="lg:col-span-3">
+                <div class="bg-white rounded-xl shadow-lg h-[600px] flex flex-col">
+                    <!-- Header del chat -->
+                    <div class="border-b border-gray-200 p-4">
+                        <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-comments mr-2 text-purple-600"></i>
+                            Chat con tus Documentos
+                        </h3>
+                        <p class="text-sm text-gray-500">Haz preguntas sobre el contenido de tus archivos subidos</p>
+                    </div>
+
+                    <!-- Historial del chat -->
+                    <div id="chatHistory" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                        <div class="chat-message-assistant p-4 max-w-[80%]">
+                            <div class="flex items-start space-x-3">
+                                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-robot text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-700">Asistente IA</p>
+                                    <p class="text-gray-600 mt-1">¡Hola! Sube algunos documentos y podré ayudarte a analizar su contenido. Puedes preguntarme sobre la información en los archivos, resumir contenido, o extraer datos específicos.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Área de entrada -->
+                    <div class="border-t border-gray-200 p-4">
+                        <form id="chatForm" class="space-y-3">
+                            <div class="flex space-x-3">
+                                <input type="text" 
+                                       id="questionInput"
+                                       placeholder="Escribe tu pregunta sobre los documentos..." 
+                                       class="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                       disabled>
+                                <button type="submit" 
+                                        id="sendBtn"
+                                        class="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                    <i class="fas fa-paper-plane mr-2"></i>
+                                    Enviar
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" class="suggestion-btn text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-200 transition-colors">
+                                    Resumen los documentos
+                                </button>
+                                <button type="button" class="suggestion-btn text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-200 transition-colors">
+                                    Extraer datos importantes
+                                </button>
+                                <button type="button" class="suggestion-btn text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-200 transition-colors">
+                                    Información del paciente
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Información de estado -->
+                <div id="statusPanel" class="mt-4 bg-white rounded-xl shadow-lg p-4 hidden">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div id="statusIcon" class="w-8 h-8 rounded-full flex items-center justify-center">
+                                <i class="fas fa-cog fa-spin text-blue-600"></i>
+                            </div>
+                            <div>
+                                <p id="statusTitle" class="font-semibold text-gray-800">Procesando archivos</p>
+                                <p id="statusMessage" class="text-sm text-gray-600">Los archivos se están procesando...</p>
+                            </div>
+                        </div>
+                        <div id="progressBar" class="w-32 bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Variables globales
+    let currentSessionId = null;
+    let uploadedFiles = [];
+    let isProcessing = false;
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSession();
+        setupEventListeners();
+    });
+
+    // Inicializar sesión
+    function initializeSession() {
+        // Generar o recuperar session ID
+        currentSessionId = localStorage.getItem('notebooklm_session_id');
+        if (!currentSessionId) {
+            currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('notebooklm_session_id', currentSessionId);
+        }
+        
+        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 12) + '...';
+        loadSessionFiles();
+    }
+
+    // Configurar event listeners
+    function setupEventListeners() {
+        // Upload area
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // Botones
+        document.getElementById('processBtn').addEventListener('click', processFiles);
+        document.getElementById('clearSessionBtn').addEventListener('click', clearSession);
+        document.getElementById('chatForm').addEventListener('submit', sendMessage);
+        
+        // Botones de sugerencia
+        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.getElementById('questionInput').value = e.target.textContent;
+            });
+        });
+    }
+
+    // Manejar archivos subidos
+    function handleFiles(files) {
+        if (files.length === 0) return;
+        
+        for (let file of files) {
+            uploadedFiles.push({
+                file: file,
+                id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                size: file.size,
+                status: 'pending'
+            });
+        }
+        
+        updateFilesList();
+        updateProcessButton();
+    }
+
+    // Actualizar lista de archivos en UI
+    function updateFilesList() {
+        const filesList = document.getElementById('filesList');
+        const fileCount = document.getElementById('fileCount');
+        
+        fileCount.textContent = uploadedFiles.length;
+        
+        if (uploadedFiles.length === 0) {
+            filesList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay archivos subidos</p>';
+            return;
+        }
+        
+        filesList.innerHTML = uploadedFiles.map(file => `
+            <div class="file-card bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-file text-blue-600"></i>
+                        <div>
+                            <p class="font-medium text-gray-800 text-sm">${file.name}</p>
+                            <p class="text-xs text-gray-500">${formatFileSize(file.size)}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="status-badge px-2 py-1 rounded-full text-xs ${getStatusClass(file.status)}">
+                            ${getStatusText(file.status)}
+                        </span>
+                        <button onclick="removeFile('${file.id}')" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Procesar archivos
+    async function processFiles() {
+        if (uploadedFiles.length === 0 || isProcessing) return;
+        
+        isProcessing = true;
+        updateProcessButton();
+        showStatusPanel('Procesando archivos', 'Subiendo y procesando documentos...', 'loading');
+        
+        let processedCount = 0;
+        
+        for (let fileData of uploadedFiles) {
+            if (fileData.status === 'processed') continue;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', fileData.file);
+                formData.append('session_id', currentSessionId);
+                
+                const response = await fetch('/api/v1/upload_temporary', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    fileData.status = 'processed';
+                    processedCount++;
+                    updateProgress((processedCount / uploadedFiles.length) * 100);
+                } else {
+                    fileData.status = 'error';
+                    console.error('Error procesando archivo:', fileData.name);
+                }
+            } catch (error) {
+                fileData.status = 'error';
+                console.error('Error:', error);
+            }
+            
+            updateFilesList();
+        }
+        
+        showStatusPanel('Procesamiento completado', `${processedCount} archivos procesados correctamente`, 'success');
+        updateProcessButton();
+        isProcessing = false;
+        
+        // Habilitar chat después de 2 segundos
+        setTimeout(() => {
+            hideStatusPanel();
+            enableChat();
+        }, 2000);
+    }
+
+    // Habilitar funcionalidad de chat
+    function enableChat() {
+        document.getElementById('questionInput').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+        
+        addChatMessage('assistant', '¡Los archivos han sido procesados! Ahora puedes hacer preguntas sobre su contenido.');
+    }
+
+    // Enviar mensaje al chat
+    async function sendMessage(e) {
+        e.preventDefault();
+        
+        const questionInput = document.getElementById('questionInput');
+        const question = questionInput.value.trim();
+        
+        if (!question || isProcessing) return;
+        
+        // Añadir mensaje del usuario
+        addChatMessage('user', question);
+        questionInput.value = '';
+        
+        // Mostrar indicador de typing
+        showTypingIndicator();
+        
+        try {
+            const response = await fetch('/api/v1/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    question: question,
+                    score_threshold: 0.5
+                })
+            });
+            
+            hideTypingIndicator();
+            
+            if (response.ok) {
+                const data = await response.json();
+                displayLLMResponse(data);
+            } else {
+                addChatMessage('assistant', 'Lo siento, hubo un error procesando tu pregunta. Inténtalo de nuevo.');
+            }
+        } catch (error) {
+            hideTypingIndicator();
+            addChatMessage('assistant', 'Error de conexión. Por favor, intenta nuevamente.');
+        }
+    }
+
+    // Mostrar respuesta del LLM
+    function displayLLMResponse(data) {
+        let responseText = '';
+        
+        if (data.respuesta) {
+            const resp = data.respuesta;
+            
+            // Resumen
+            if (resp.resumen) {
+                responseText += `**Resumen:** ${resp.resumen}\n\n`;
+            }
+            
+            // Datos de prestación de servicios
+            if (resp.datos_prestacion_servicios) {
+                const datos = resp.datos_prestacion_servicios;
+                responseText += '**Datos Extraídos:**\n';
+                
+                if (datos.nombre_paciente) responseText += `• Paciente: ${datos.nombre_paciente}\n`;
+                if (datos.tipo_documento) responseText += `• Tipo documento: ${datos.tipo_documento}\n`;
+                if (datos.numero_documento) responseText += `• Número documento: ${datos.numero_documento}\n`;
+                if (datos.numero_factura) responseText += `• Factura: ${datos.numero_factura}\n`;
+                if (datos.fecha_expedicion_factura) responseText += `• Fecha: ${datos.fecha_expedicion_factura}\n`;
+                if (datos.emisor_factura) responseText += `• Emisor: ${datos.emisor_factura}\n`;
+                if (datos.pagador) responseText += `• Pagador: ${datos.pagador}\n`;
+                if (datos.autorizacion && datos.autorizacion.length > 0) {
+                    responseText += `• Autorizaciones: ${datos.autorizacion.join(', ')}\n`;
+                }
+                responseText += '\n';
+            }
+            
+            // Categorías detectadas
+            const categorias = [];
+            if (resp.prestacion_servicios_de_salud && resp.prestacion_servicios_de_salud.length > 0) {
+                categorias.push(...resp.prestacion_servicios_de_salud);
+            }
+            if (resp.documentos_administrativos && resp.documentos_administrativos.length > 0) {
+                categorias.push(...resp.documentos_administrativos);
+            }
+            if (resp.documentos_contractuales && resp.documentos_contractuales.length > 0) {
+                categorias.push(...resp.documentos_contractuales);
+            }
+            if (resp.otros && resp.otros.length > 0) {
+                categorias.push(...resp.otros);
+            }
+            
+            if (categorias.length > 0) {
+                responseText += `**Documentos detectados:** ${categorias.join(', ')}`;
+            }
+        }
+        
+        addChatMessage('assistant', responseText || 'No se pudo extraer información específica de los documentos.');
+    }
+
+    // Funciones auxiliares
+    function addChatMessage(role, content) {
+        const chatHistory = document.getElementById('chatHistory');
+        const messageDiv = document.createElement('div');
+        
+        messageDiv.className = `chat-message-${role} p-4 max-w-[80%] ${role === 'user' ? 'ml-auto' : ''}`;
+        messageDiv.innerHTML = `
+            <div class="flex items-start space-x-3 ${role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}">
+                <div class="w-8 h-8 ${role === 'user' ? 'bg-blue-100' : 'bg-purple-100'} rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="${role === 'user' ? 'fas fa-user text-blue-600' : 'fas fa-robot text-purple-600'}"></i>
+                </div>
+                <div class="${role === 'user' ? 'text-right' : ''}">
+                    <p class="font-semibold text-gray-700">${role === 'user' ? 'Tú' : 'Asistente IA'}</p>
+                    <p class="text-gray-600 mt-1 whitespace-pre-wrap">${content}</p>
+                </div>
+            </div>
+        `;
+        
+        chatHistory.appendChild(messageDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function showTypingIndicator() {
+        const chatHistory = document.getElementById('chatHistory');
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typingIndicator';
+        typingDiv.className = 'chat-message-assistant p-4 max-w-[80%]';
+        typingDiv.innerHTML = `
+            <div class="flex items-start space-x-3">
+                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-robot text-purple-600"></i>
+                </div>
+                <div>
+                    <p class="font-semibold text-gray-700">Asistente IA</p>
+                    <div class="typing-indicator mt-1">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        chatHistory.appendChild(typingDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function hideTypingIndicator() {
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    }
+
+    function showStatusPanel(title, message, type = 'loading') {
+        const panel = document.getElementById('statusPanel');
+        const icon = document.getElementById('statusIcon');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Configurar icono según tipo
+        icon.innerHTML = type === 'loading' 
+            ? '<i class="fas fa-cog fa-spin text-blue-600"></i>'
+            : '<i class="fas fa-check-circle text-green-600"></i>';
+        
+        statusTitle.textContent = title;
+        statusMessage.textContent = message;
+        panel.classList.remove('hidden');
+    }
+
+    function hideStatusPanel() {
+        document.getElementById('statusPanel').classList.add('hidden');
+    }
+
+    function updateProgress(percent) {
+        document.querySelector('#progressBar > div').style.width = percent + '%';
+    }
+
+    function updateProcessButton() {
+        const btn = document.getElementById('processBtn');
+        const hasFiles = uploadedFiles.length > 0;
+        const hasPending = uploadedFiles.some(f => f.status === 'pending');
+        
+        btn.disabled = !hasFiles || !hasPending || isProcessing;
+        btn.innerHTML = isProcessing 
+            ? '<i class="fas fa-cog fa-spin mr-2"></i>Procesando...'
+            : '<i class="fas fa-cog mr-2"></i>Procesar Archivos';
+    }
+
+    function removeFile(fileId) {
+        uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+        updateFilesList();
+        updateProcessButton();
+    }
+
+    async function clearSession() {
+        if (!confirm('¿Estás seguro de que quieres limpiar la sesión? Se perderán todos los archivos y el historial de chat.')) {
+            return;
+        }
+        
+        try {
+            await fetch(`/api/v1/session/${currentSessionId}`, {
+                method: 'DELETE'
+            });
+        } catch (error) {
+            console.error('Error clearing session:', error);
+        }
+        
+        // Limpiar local
+        uploadedFiles = [];
+        currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('notebooklm_session_id', currentSessionId);
+        
+        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 12) + '...';
+        document.getElementById('chatHistory').innerHTML = `
+            <div class="chat-message-assistant p-4 max-w-[80%]">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-robot text-purple-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-700">Asistente IA</p>
+                        <p class="text-gray-600 mt-1">¡Hola! Sube algunos documentos y podré ayudarte a analizar su contenido. Puedes preguntarme sobre la información en los archivos, resumir contenido, o extraer datos específicos.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        updateFilesList();
+        updateProcessButton();
+        document.getElementById('questionInput').disabled = true;
+        document.getElementById('sendBtn').disabled = true;
+    }
+
+    async function loadSessionFiles() {
+        try {
+            const response = await fetch(`/api/v1/session_files/${currentSessionId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.files && data.files.length > 0) {
+                    document.getElementById('fileCount').textContent = data.files.length;
+                    enableChat();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading session files:', error);
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getStatusClass(status) {
+        switch(status) {
+            case 'processed': return 'bg-green-100 text-green-800';
+            case 'error': return 'bg-red-100 text-red-800';
+            default: return 'bg-yellow-100 text-yellow-800';
+        }
+    }
+
+    function getStatusText(status) {
+        switch(status) {
+            case 'processed': return 'Procesado';
+            case 'error': return 'Error';
+            default: return 'Pendiente';
+        }
+    }
+</script>
+{% endblock %}

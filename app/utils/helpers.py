@@ -295,3 +295,74 @@ def validate_parsed_response(parsed: dict, context_text: str = "") -> dict:
     out["resumen"] = out.get("resumen", "") if isinstance(out.get("resumen", ""), str) else ""
 
     return out
+
+# Agregar en helpers.py después de las funciones de extracción existentes
+def extract_text(file_content: bytes, filename: str) -> str:
+    """
+    Extrae texto de contenido de archivo en bytes (similar a extraer_texto_mejorado_async pero sincrónico)
+    """
+    if not file_content:
+        return ""
+    
+    # Determinar el tipo de archivo por extensión
+    ext = filename.lower().split('.')[-1] if filename else ''
+    
+    # Si es PDF, usar las mismas estrategias que extraer_texto_mejorado_async
+    if ext == 'pdf':
+        # Estrategia 1: PyMuPDF
+        try:
+            texto = extraer_con_pymupdf(file_content)
+            if texto and texto.strip():
+                logger.info(f"Texto extraído con PyMuPDF: {len(texto)} caracteres")
+                return limpiar_texto(texto)
+        except Exception as e:
+            logger.warning(f"[PyMuPDF] Falló: {e}")
+
+        # Estrategia 2: pdfplumber
+        try:
+            texto = extraer_con_pdfplumber(file_content)
+            if texto and texto.strip():
+                logger.info(f"Texto extraído con pdfplumber: {len(texto)} caracteres")
+                return limpiar_texto(texto)
+        except Exception as e:
+            logger.warning(f"[pdfplumber] Falló: {e}")
+
+        # Estrategia 3: OCR
+        try:
+            texto = extraer_con_ocr(file_content, 'spa')
+            if texto and texto.strip():
+                logger.info(f"Texto extraído con OCR: {len(texto)} caracteres")
+                return limpiar_texto(texto)
+        except Exception as e:
+            logger.error(f"[OCR] Falló: {e}")
+    
+    # Si es imagen, usar OCR directamente
+    elif ext in ['png', 'jpg', 'jpeg', 'tiff', 'bmp']:
+        try:
+            texto = extraer_con_ocr(file_content, 'spa')
+            if texto and texto.strip():
+                logger.info(f"Texto extraído con OCR: {len(texto)} caracteres")
+                return limpiar_texto(texto)
+        except Exception as e:
+            logger.error(f"[OCR para imagen] Falló: {e}")
+    
+    # Para archivos de texto plano
+    elif ext in ['txt', 'md']:
+        try:
+            texto = file_content.decode('utf-8')
+            return limpiar_texto(texto)
+        except UnicodeDecodeError:
+            try:
+                texto = file_content.decode('latin-1')
+                return limpiar_texto(texto)
+            except Exception as e:
+                logger.error(f"[Decodificación texto] Falló: {e}")
+    
+    logger.warning(f"No se pudo extraer texto del archivo {filename}")
+    return ""
+
+def split_text(text: str) -> List[str]:
+    """
+    Función alias para dividir_en_chunks_semanticos para mantener compatibilidad
+    """
+    return dividir_en_chunks_semanticos(text)

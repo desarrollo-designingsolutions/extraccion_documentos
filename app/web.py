@@ -29,3 +29,8 @@ async def chat_page(request: Request, file_id: int = None, file_name: str = None
         "file_id": file_id,
         "file_name": file_name
     })
+
+@router.get("/notebooklm", response_class=HTMLResponse)
+async def notebooklm_page(request: Request):
+    """Ruta para NotebookLM - Chat con documentos temporales"""
+    return templates.TemplateResponse("notebooklm.html", {"request": request})

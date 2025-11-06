@@ -7,6 +7,7 @@ from routes.estadisticas_archivos import router as estadisticas_archivos
 from routes.search_invoice_number import router as search_invoice_number
 from routes.list_files import router as list_files
 from routes.chat_router import router as chat_router
+from routes.notebooklm import router as notebooklm_router
 
 # Router principal
 router = APIRouter()
@@ -42,3 +43,6 @@ router.include_router(list_files)
 
 # api de chat con ia sobre documento individual
 router.include_router(chat_router)
+
+# Agregar en la lista de routers incluidos
+router.include_router(notebooklm_router)

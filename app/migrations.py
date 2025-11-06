@@ -9,11 +9,16 @@ def run_migrations():
 
     inspector = inspect(engine)
 
-    # Verificar y crear tabla files
-    tabla_files_existe = inspector.has_table("files")
+    tablas_existentes = inspector.get_table_names()
+    tablas_requeridas = ['files', 'files_chunks', 'invoice_audits', 'temporary_files', 'temporary_files_chunks']
 
-    if not tabla_files_existe:
-        Base.metadata.create_all(bind=engine)
+    # Crear tablas que no existen
+    for tabla in tablas_requeridas:
+        if tabla not in tablas_existentes:
+            print(f"Creando tabla: {tabla}")
+    
+    # Crear todas las tablas definidas en los modelos
+    Base.metadata.create_all(bind=engine)
 
 if __name__ == "__main__":
     print("🚀 Iniciando migraciones de base de datos...")
