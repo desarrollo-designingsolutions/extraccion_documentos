@@ -274,7 +274,7 @@ async def responder_pregunta_mejorado(request: Request, input_data: PreguntaInpu
     # Reranking
     pares = [[input_data.pregunta, c["content"]] for c in chunks_candidatos]
     try:
-        scores = await predict_reranker(request, pares, batch_size=8)  # Ajusta batch si CPU/GPU
+        scores = await predict_reranker(request, pares, batch_size=2)  # Ajusta batch si CPU/GPU
     except Exception:
         logger.exception("Error en reranking")
         raise HTTPException(status_code=500, detail="Error en reranking")

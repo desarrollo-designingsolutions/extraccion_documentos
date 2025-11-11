@@ -177,9 +177,9 @@ async def generar_embeddings_async(
 
     async def wrapper(idx: int, chunk: str):
         async with sem:
-            # logger.info(f"[Embeddings] Iniciando chunk {idx+1}/{len(chunks)}")
+            logger.info(f"[Embeddings] Iniciando chunk {idx+1}/{len(chunks)}")
             result = await asyncio.to_thread(generar_embedding_openai, chunk)
-            # logger.info(f"[Embeddings] Finalizado chunk {idx+1}/{len(chunks)}")
+            logger.info(f"[Embeddings] Finalizado chunk {idx+1}/{len(chunks)}")
             return result
 
     tasks = [wrapper(i, chunk) for i, chunk in enumerate(chunks)]

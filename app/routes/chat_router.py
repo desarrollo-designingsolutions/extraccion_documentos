@@ -280,7 +280,7 @@ async def chat_with_document(
         # Aplicar reranking
         pares = [[question, c["content"]] for c in chunks_candidatos]
         try:
-            scores = await predict_reranker(request, pares, batch_size=8)
+            scores = await predict_reranker(request, pares, batch_size=2)
         except Exception:
             logger.exception("Error en reranking")
             scores = [1.0] * len(chunks_candidatos)

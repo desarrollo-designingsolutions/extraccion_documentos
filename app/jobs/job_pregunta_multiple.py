@@ -333,7 +333,7 @@ async def procesar_archivo_async(
 
         # Aplicar reranking
         try:
-            scores = await predict_reranker(reranker, pares, batch_size=8)
+            scores = await predict_reranker(reranker, pares, batch_size=2)
         except Exception as e:
             logger.exception(f"Error en reranking para {file_name}: {e}")
             return None

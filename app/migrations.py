@@ -10,7 +10,7 @@ def run_migrations():
     inspector = inspect(engine)
 
     tablas_existentes = inspector.get_table_names()
-    tablas_requeridas = ['files', 'files_chunks', 'invoice_audits', 'temporary_files', 'temporary_files_chunks']
+    tablas_requeridas = ['files', 'files_chunks', 'invoice_audits', 'temporary_files', 'temporary_files_chunks', 'conversation_sessions', 'conversation_messages']
 
     # Crear tablas que no existen
     for tabla in tablas_requeridas:
