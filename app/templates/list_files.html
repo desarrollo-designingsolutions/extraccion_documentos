@@ -2,23 +2,6 @@
 
 {% block title %}Lista de Archivos - Extracción Documentos{% endblock %}
 
-{% block navbar %}
-<!-- Barra de navegación específica para list_files -->
-<nav class="bg-indigo-700 shadow-md">
-    <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center py-3">
-            <a href="/" class="text-white text-xl font-bold flex items-center">
-                <i class="fas fa-file-alt mr-2"></i>Extracción Documentos
-            </a>
-            <div class="flex space-x-4">
-                <a href="/" class="text-white hover:text-indigo-200 transition-colors">Inicio</a>
-                <a href="/list_files" class="text-white font-semibold border-b-2 border-white">Lista de Archivos</a>
-            </div>
-        </div>
-    </div>
-</nav>
-{% endblock %}
-
 {% block extra_css %}
 <style>
     .json-view {

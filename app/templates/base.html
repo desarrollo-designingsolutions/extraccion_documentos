@@ -64,11 +64,18 @@
                     <i class="fas fa-file-alt mr-3"></i>Extracción Documentos
                 </a>
                 <div class="flex space-x-6">
-                    <a href="/" class="text-white font-semibold border-b-2 border-white pb-1">Inicio</a>
-                    <a href="/list_files" class="text-white hover:text-indigo-200 transition-colors">
+                    <a href="/"
+                        class="text-white font-semibold transition-colors pb-1 {% if request.path == '/' %}border-b-2 border-white{% else %}hover:text-indigo-200{% endif %}">
+                        Inicio
+                    </a>
+                    <a href="/list_files"
+                        class="text-white transition-colors {% if request.path == '/list_files' %}border-b-2 border-white{% else %}hover:text-indigo-200{% endif %}">
                         Lista de Archivos
                     </a>
-                    <a href="/notebooklm" class="text-white hover:text-indigo-200 transition-colors">NotebookLM</a>
+                    <a href="/ds_salud_ia"
+                        class="text-white transition-colors {% if request.path == '/ds_salud_ia' %}border-b-2 border-white{% else %}hover:text-indigo-200{% endif %}">
+                        DS Salud IA
+                    </a>
                 </div>
             </div>
         </div>

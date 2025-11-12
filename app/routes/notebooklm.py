@@ -225,7 +225,7 @@ async def create_conversation(
         "created_at": conversation.created_at
     }
 
-@router.get("/conversations/{conversation_id}")
+@router.get("/conversation/{conversation_id}")
 async def get_conversation(
     conversation_id: int,
     db: Session = Depends(get_db)

@@ -1,0 +1,1302 @@
+{% extends "base.html" %}
+
+{% block title %}DS Salud IA - Chat con Documentos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-message-user {
+        background-color: #3b82f6;
+        color: white;
+        border-radius: 12px 12px 4px 12px;
+        margin-left: auto;
+        max-width: 85%;
+    }
+
+    .chat-message-assistant {
+        background-color: #f8fafc;
+        color: #334155;
+        border-radius: 12px 12px 12px 4px;
+        border: 1px solid #e2e8f0;
+        max-width: 85%;
+    }
+
+    .file-card,
+    .conversation-card {
+        transition: all 0.2s ease;
+        border: 1px solid #e2e8f0;
+    }
+
+    .file-card:hover,
+    .conversation-card:hover {
+        transform: translateY(-1px);
+        border-color: #3b82f6;
+    }
+
+    .upload-area {
+        border: 2px dashed #cbd5e1;
+        transition: all 0.2s ease;
+    }
+
+    .upload-area.dragover {
+        border-color: #3b82f6;
+        background-color: #f0f9ff;
+    }
+
+    .typing-indicator {
+        display: inline-flex;
+        gap: 4px;
+    }
+
+    .typing-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #64748b;
+        animation: typing 1.4s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(1) {
+        animation-delay: -0.32s;
+    }
+
+    .typing-dot:nth-child(2) {
+        animation-delay: -0.16s;
+    }
+
+    @keyframes typing {
+
+        0%,
+        80%,
+        100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+        }
+
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* Estilos mejorados para Markdown */
+    .markdown-content {
+        line-height: 1.6;
+        font-size: 0.95rem;
+    }
+
+    .markdown-content h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 1rem 0 0.5rem 0;
+        color: #1e293b;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 0.25rem;
+    }
+
+    .markdown-content h2 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin: 0.875rem 0 0.5rem 0;
+        color: #334155;
+    }
+
+    .markdown-content h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0.75rem 0 0.5rem 0;
+        color: #475569;
+    }
+
+    .markdown-content p {
+        margin-bottom: 0.75rem;
+        color: #475569;
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+        margin-bottom: 0.75rem;
+        padding-left: 1.25rem;
+        color: #475569;
+    }
+
+    .markdown-content li {
+        margin-bottom: 0.25rem;
+    }
+
+    .markdown-content strong {
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    .markdown-content em {
+        font-style: italic;
+        color: #475569;
+    }
+
+    .markdown-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.875rem;
+    }
+
+    .markdown-content th,
+    .markdown-content td {
+        padding: 0.5rem;
+        border: 1px solid #e2e8f0;
+        text-align: left;
+    }
+
+    .markdown-content th {
+        background-color: #f8fafc;
+        font-weight: 600;
+        color: #334155;
+    }
+
+    .markdown-content blockquote {
+        border-left: 3px solid #3b82f6;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #64748b;
+        font-style: italic;
+    }
+
+    .markdown-content code {
+        background-color: #f1f5f9;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        color: #dc2626;
+    }
+
+    .loader {
+        border: 2px solid #f1f5f9;
+        border-top: 2px solid #3b82f6;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .conversation-active {
+        background-color: #f0f9ff;
+        border-left: 3px solid #3b82f6;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 1rem;
+    }
+
+    /* Scrollbar personalizado */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 2px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 2px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
+    /* Mejoras de diseño minimalista */
+    .card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-primary {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #2563eb;
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .input-field {
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .input-field:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Indicador de conversación vacía */
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #64748b;
+    }
+
+    .empty-state i {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-50 py-6">
+    <div class="container mx-auto px-4 max-w-7xl">
+        <!-- Header minimalista -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-semibold text-slate-800 mb-3">
+                <i class="fas fa-brain mr-2 text-blue-500"></i>DS Salud IA
+            </h1>
+            <p class="text-slate-600 max-w-2xl mx-auto">
+                Analiza documentos médicos con IA. Sube archivos y conversa con su contenido.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+            <!-- Sidebar - Conversaciones -->
+            <div class="lg:col-span-1 space-y-5">
+                <!-- Panel de conversaciones -->
+                <div class="card p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800 flex items-center">
+                            <i class="fas fa-comments mr-2 text-blue-500"></i>
+                            Conversaciones
+                        </h3>
+                        <button id="newConversationBtn" class="btn-primary p-2 rounded-full" title="Nueva conversación">
+                            <i class="fas fa-plus text-sm"></i>
+                        </button>
+                    </div>
+
+                    <div id="conversationsList" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                        <div class="text-center py-4">
+                            <div class="loader mx-auto mb-2"></div>
+                            <p class="text-slate-500 text-sm">Cargando conversaciones...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información de sesión -->
+                <div class="card p-5">
+                    <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
+                        <i class="fas fa-info-circle mr-2 text-slate-500"></i>
+                        Información
+                    </h3>
+
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-600">Sesión:</span>
+                            <span id="sessionId"
+                                class="font-mono text-slate-800 bg-slate-100 px-2 py-1 rounded text-xs"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-600">Conversación:</span>
+                            <span id="activeConversationName" class="font-medium text-blue-600">Ninguna</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-600">Archivos:</span>
+                            <span id="fileCount" class="font-medium text-slate-800">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Área principal - Gestión de archivos y chat -->
+            <div class="lg:col-span-4">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
+                    <!-- Panel de gestión de archivos -->
+                    <div class="lg:col-span-1 space-y-5">
+                        <!-- Panel de subida -->
+                        <div class="card p-5">
+                            <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
+                                <i class="fas fa-cloud-upload-alt mr-2 text-blue-500"></i>
+                                Subir Documentos
+                            </h3>
+
+                            <!-- Área de dropzone -->
+                            <div id="uploadArea" class="upload-area rounded-lg p-4 text-center cursor-pointer mb-3">
+                                <i class="fas fa-file-alt text-3xl text-slate-400 mb-2"></i>
+                                <p class="text-slate-600 text-sm mb-1">Arrastra archivos aquí</p>
+                                <p class="text-xs text-slate-500">PDF, imágenes, Word, Excel</p>
+                                <input type="file" id="fileInput" multiple class="hidden"
+                                    accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx">
+                            </div>
+
+                            <!-- Botones de acción -->
+                            <div class="space-y-2">
+                                <button id="processBtn"
+                                    class="btn-primary w-full py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                                    <i class="fas fa-cog mr-2"></i>
+                                    Procesar Archivos
+                                </button>
+                                <button id="clearSessionBtn"
+                                    class="w-full bg-slate-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-slate-700 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-trash mr-2"></i>
+                                    Limpiar Sesión
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Lista de archivos -->
+                        <div class="card p-5">
+                            <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
+                                <i class="fas fa-files mr-2 text-green-500"></i>
+                                Archivos Subidos
+                            </h3>
+                            <div id="filesList" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                                <div class="empty-state">
+                                    <i class="fas fa-folder-open"></i>
+                                    <p class="text-sm">No hay archivos subidos</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Área de chat -->
+                    <div class="lg:col-span-3">
+                        <div class="card h-[600px] flex flex-col">
+                            <!-- Header del chat -->
+                            <div class="border-b border-slate-200 p-4 flex justify-between items-center">
+                                <div>
+                                    <h3 class="font-semibold text-slate-800 flex items-center">
+                                        <i class="fas fa-comments mr-2 text-purple-500"></i>
+                                        <span id="chatTitle">Nueva Conversación</span>
+                                    </h3>
+                                    <p class="text-sm text-slate-500">Haz preguntas sobre tus documentos</p>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button id="clearChatBtn"
+                                        class="p-2 text-slate-500 hover:text-orange-500 transition-colors"
+                                        title="Limpiar chat">
+                                        <i class="fas fa-eraser"></i>
+                                    </button>
+                                    <button id="deleteConversationBtn"
+                                        class="p-2 text-slate-500 hover:text-red-500 transition-colors"
+                                        title="Eliminar conversación">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Historial del chat -->
+                            <div id="chatHistory" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                <div class="chat-message-assistant p-4">
+                                    <div class="flex items-start space-x-3">
+                                        <div
+                                            class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <i class="fas fa-robot text-purple-600 text-sm"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="font-semibold text-slate-700 mb-1">Asistente IA</p>
+                                            <div class="text-slate-600 markdown-content">
+                                                <p>¡Hola! Selecciona una conversación existente o crea una nueva. Luego
+                                                    sube algunos documentos y podré ayudarte a analizar su contenido.
+                                                </p>
+                                                <p>Puedes preguntarme sobre:</p>
+                                                <ul>
+                                                    <li>Información de pacientes</li>
+                                                    <li>Facturas y autorizaciones</li>
+                                                    <li>Procedimientos médicos</li>
+                                                    <li>Resúmenes de documentos</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Área de entrada -->
+                            <div class="border-t border-slate-200 p-4">
+                                <form id="chatForm" class="space-y-3">
+                                    <div class="flex space-x-3">
+                                        <input type="text" id="questionInput"
+                                            placeholder="Escribe tu pregunta sobre los documentos..."
+                                            class="input-field flex-1" disabled>
+                                        <button type="submit" id="sendBtn"
+                                            class="btn-primary px-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                            <i class="fas fa-paper-plane mr-2"></i>
+                                            Enviar
+                                        </button>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button"
+                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
+                                            Resumen del documento
+                                        </button>
+                                        <button type="button"
+                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
+                                            Extraer datos importantes
+                                        </button>
+                                        <button type="button"
+                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
+                                            Información del paciente
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Información de estado -->
+                        <div id="statusPanel" class="card p-4 mt-4 hidden">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div id="statusIcon" class="w-8 h-8 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-cog fa-spin text-blue-500"></i>
+                                    </div>
+                                    <div>
+                                        <p id="statusTitle" class="font-semibold text-slate-800">Procesando archivos</p>
+                                        <p id="statusMessage" class="text-sm text-slate-600">Los archivos se están
+                                            procesando...</p>
+                                    </div>
+                                </div>
+                                <div id="progressBar" class="w-32 bg-slate-200 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                        style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Variables globales
+    let currentSessionId = null;
+    let currentConversationId = null;
+    let uploadedFiles = [];
+    let isProcessing = false;
+    let conversations = [];
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeSession();
+        setupEventListeners();
+        loadConversations();
+    });
+
+    // Inicializar sesión
+    function initializeSession() {
+        currentSessionId = localStorage.getItem('notebooklm_session_id');
+        if (!currentSessionId) {
+            currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('notebooklm_session_id', currentSessionId);
+        }
+
+        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 10) + '...';
+        loadSessionFiles();
+    }
+
+    // Configurar event listeners
+    function setupEventListeners() {
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // Botones
+        document.getElementById('processBtn').addEventListener('click', processFiles);
+        document.getElementById('clearSessionBtn').addEventListener('click', clearSession);
+        document.getElementById('newConversationBtn').addEventListener('click', createNewConversation);
+        document.getElementById('clearChatBtn').addEventListener('click', clearCurrentChat);
+        document.getElementById('deleteConversationBtn').addEventListener('click', deleteCurrentConversation);
+        document.getElementById('chatForm').addEventListener('submit', sendMessage);
+
+        // Botones de sugerencia
+        document.querySelectorAll('.suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.getElementById('questionInput').value = e.target.textContent;
+            });
+        });
+    }
+
+    // Cargar conversaciones
+    async function loadConversations() {
+        showLoaderInConversationsList();
+
+        try {
+            const response = await fetch(`/api/v1/conversations/${currentSessionId}`);
+            if (response.ok) {
+                const data = await response.json();
+                conversations = data.conversations || [];
+                renderConversationsList();
+
+                // Si hay conversaciones, cargar la más reciente
+                if (conversations.length > 0) {
+                    const mostRecent = conversations.reduce((latest, current) =>
+                        new Date(current.updated_at) > new Date(latest.updated_at) ? current : latest
+                    );
+                    loadConversation(mostRecent.id);
+                }
+            } else {
+                console.error('Error loading conversations');
+                showErrorInConversationsList();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showErrorInConversationsList();
+        }
+    }
+
+    // Renderizar lista de conversaciones
+    function renderConversationsList() {
+        const conversationsList = document.getElementById('conversationsList');
+
+        if (conversations.length === 0) {
+            conversationsList.innerHTML = `
+                <div class="empty-state py-4">
+                    <i class="fas fa-comments"></i>
+                    <p class="text-sm">No hay conversaciones</p>
+                    <button id="createFirstConversation" class="text-blue-500 hover:text-blue-700 text-sm font-medium mt-2">
+                        Crear primera conversación
+                    </button>
+                </div>
+            `;
+            document.getElementById('createFirstConversation').addEventListener('click', createNewConversation);
+            return;
+        }
+
+        // Ordenar conversaciones por fecha de actualización (más reciente primero)
+        const sortedConversations = [...conversations].sort((a, b) =>
+            new Date(b.updated_at) - new Date(a.updated_at)
+        );
+
+        conversationsList.innerHTML = sortedConversations.map(conv => `
+            <div class="conversation-card rounded p-3 cursor-pointer ${conv.id == currentConversationId ? 'conversation-active' : ''}" 
+                 data-conversation-id="${conv.id}">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-slate-800 text-sm truncate">${conv.name || 'Conversación sin nombre'}</p>
+                        <p class="text-xs text-slate-500 mt-1">${formatRelativeTime(conv.updated_at)}</p>
+                    </div>
+                    <button class="delete-conv-btn text-slate-400 hover:text-red-500 p-1 rounded transition-colors" data-conv-id="${conv.id}">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // Event listeners
+        document.querySelectorAll('.conversation-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (!e.target.closest('.delete-conv-btn')) {
+                    const convId = card.getAttribute('data-conversation-id');
+                    loadConversation(convId);
+                }
+            });
+        });
+
+        document.querySelectorAll('.delete-conv-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const convId = btn.getAttribute('data-conv-id');
+                deleteConversation(convId);
+            });
+        });
+    }
+
+    // Cargar una conversación específica
+    async function loadConversation(conversationId) {
+        showLoaderInChat();
+
+        try {
+            const response = await fetch(`/api/v1/conversations/${conversationId}`);
+            if (response.ok) {
+                const data = await response.json();
+                currentConversationId = conversationId;
+
+                // Actualizar UI
+                document.getElementById('chatTitle').textContent = data.name || 'Conversación sin nombre';
+                document.getElementById('activeConversationName').textContent = data.name || 'Conversación sin nombre';
+
+                // Limpiar y cargar historial de mensajes
+                const chatHistory = document.getElementById('chatHistory');
+                chatHistory.innerHTML = '';
+
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(msg => {
+                        addChatMessage(msg.role, msg.content, false);
+                    });
+                } else {
+                    addChatMessage('assistant',
+                        'Esta es una conversación nueva. Sube algunos documentos y haz preguntas sobre ellos.',
+                        false
+                    );
+                }
+
+                // Actualizar lista de conversaciones para resaltar la activa
+                renderConversationsList();
+
+                // Habilitar chat si hay archivos procesados
+                if (data.files && data.files.length > 0) {
+                    enableChat();
+                } else {
+                    disableChat();
+                }
+
+                // Scroll al final del chat
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            } else {
+                console.error('Error loading conversation');
+                showErrorInChat();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showErrorInChat();
+        }
+    }
+
+    // Funciones de UI mejoradas
+    function showLoaderInConversationsList() {
+        const conversationsList = document.getElementById('conversationsList');
+        conversationsList.innerHTML = `
+            <div class="text-center py-4">
+                <div class="loader mx-auto mb-2"></div>
+                <p class="text-slate-500 text-sm">Cargando conversaciones...</p>
+            </div>
+        `;
+    }
+
+    function showErrorInConversationsList() {
+        const conversationsList = document.getElementById('conversationsList');
+        conversationsList.innerHTML = `
+            <div class="empty-state py-4">
+                <i class="fas fa-exclamation-triangle text-amber-500"></i>
+                <p class="text-sm">Error al cargar</p>
+                <button id="retryLoadConversations" class="text-blue-500 hover:text-blue-700 text-sm font-medium mt-2">
+                    Reintentar
+                </button>
+            </div>
+        `;
+        document.getElementById('retryLoadConversations').addEventListener('click', loadConversations);
+    }
+
+    function showLoaderInChat() {
+        const chatHistory = document.getElementById('chatHistory');
+        chatHistory.innerHTML = `
+            <div class="flex justify-center items-center h-32">
+                <div class="loader mr-3"></div>
+                <p class="text-slate-500">Cargando conversación...</p>
+            </div>
+        `;
+    }
+
+    function showErrorInChat() {
+        const chatHistory = document.getElementById('chatHistory');
+        chatHistory.innerHTML = `
+            <div class="chat-message-assistant p-4">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-robot text-purple-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-slate-700">Asistente IA</p>
+                        <div class="text-slate-600 mt-1">
+                            <p>Lo siento, hubo un error al cargar la conversación. Intenta nuevamente.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Eliminar conversación actual
+    async function deleteCurrentConversation() {
+        if (!currentConversationId) return;
+
+        if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
+            return;
+        }
+
+        await deleteConversation(currentConversationId);
+    }
+
+    // Funciones de chat mejoradas
+    function addChatMessage(role, content, scroll = true) {
+        const chatHistory = document.getElementById('chatHistory');
+        const messageDiv = document.createElement('div');
+
+        messageDiv.className = `chat-message-${role} p-4`;
+
+        let contentHTML = content;
+        if (role === 'assistant') {
+            contentHTML = convertMarkdownToHTML(content);
+        } else {
+            contentHTML = content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        }
+
+        messageDiv.innerHTML = `
+            <div class="flex items-start space-x-3 ${role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}">
+                <div class="w-8 h-8 ${role === 'user' ? 'bg-blue-100' : 'bg-purple-100'} rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="${role === 'user' ? 'fas fa-user text-blue-600' : 'fas fa-robot text-purple-600'} text-sm"></i>
+                </div>
+                <div class="${role === 'user' ? 'text-right' : ''} flex-1 min-w-0">
+                    <p class="font-semibold text-slate-700 mb-1 text-sm">${role === 'user' ? 'Tú' : 'Asistente IA'}</p>
+                    <div class="markdown-content text-slate-600">${contentHTML}</div>
+                </div>
+            </div>
+        `;
+
+        chatHistory.appendChild(messageDiv);
+        if (scroll) {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    }
+
+    // Convertir Markdown a HTML mejorado
+    function convertMarkdownToHTML(markdown) {
+        if (!markdown) return '';
+
+        return markdown
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+            .replace(/`(.*?)`/gim, '<code>$1</code>')
+            .replace(/^\* (.*$)/gim, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/^\d\. (.*$)/gim, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>')
+            .replace(/\n/g, '<br>')
+            .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+            .replace(/(<br>){3,}/g, '<br><br>');
+    }
+
+    // Resto de funciones permanecen similares pero con mejoras de UX
+    function enableChat() {
+        document.getElementById('questionInput').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('questionInput').focus();
+    }
+
+    function disableChat() {
+        document.getElementById('questionInput').disabled = true;
+        document.getElementById('sendBtn').disabled = true;
+    }
+
+    // Función para formatear tiempo relativo
+    function formatRelativeTime(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Ahora';
+        if (diffMins < 60) return `Hace ${diffMins} min`;
+        if (diffHours < 24) return `Hace ${diffHours} h`;
+        if (diffDays < 7) return `Hace ${diffDays} d`;
+        return date.toLocaleDateString('es-ES');
+    }
+
+    async function createNewConversation() {
+        showLoaderInConversationsList();
+
+        try {
+            const response = await fetch('/api/v1/conversations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    name: 'Nueva Conversación'
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                await loadConversations();
+                loadConversation(data.conversation_id);
+            } else {
+                console.error('Error creating conversation');
+                showErrorInConversationsList();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showErrorInConversationsList();
+        }
+    }
+
+    async function deleteConversation(conversationId) {
+        if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
+            return;
+        }
+
+        showLoaderInConversationsList();
+
+        try {
+            const response = await fetch(`/api/v1/conversations/${conversationId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                if (conversationId == currentConversationId) {
+                    currentConversationId = null;
+                    document.getElementById('chatTitle').textContent = 'Nueva Conversación';
+                    document.getElementById('activeConversationName').textContent = 'Ninguna';
+                    document.getElementById('chatHistory').innerHTML = `
+                    <div class="chat-message-assistant p-4">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-robot text-purple-600"></i>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-slate-700">Asistente IA</p>
+                                <div class="text-slate-600 mt-1">
+                                    <p>Selecciona una conversación existente o crea una nueva para comenzar.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                    disableChat();
+                }
+                await loadConversations();
+            } else {
+                console.error('Error deleting conversation');
+                showErrorInConversationsList();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showErrorInConversationsList();
+        }
+    }
+
+    // Limpiar chat actual
+    async function clearCurrentChat() {
+        if (!currentConversationId) return;
+
+        if (!confirm('¿Estás seguro de que quieres limpiar el historial de esta conversación?')) {
+            return;
+        }
+
+        showLoaderInChat();
+
+        try {
+            const response = await fetch(`/api/v1/conversations/${currentConversationId}/messages`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Limpiar la UI del chat
+                document.getElementById('chatHistory').innerHTML = '';
+                addChatMessage('assistant', 'El historial de la conversación ha sido limpiado. Puedes comenzar una nueva conversación.', false);
+            } else {
+                console.error('Error clearing chat');
+                showErrorInChat();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showErrorInChat();
+        }
+    }
+
+    // Manejar archivos subidos
+    function handleFiles(files) {
+        if (files.length === 0) return;
+
+        for (let file of files) {
+            uploadedFiles.push({
+                file: file,
+                id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                size: file.size,
+                status: 'pending'
+            });
+        }
+
+        updateFilesList();
+        updateProcessButton();
+    }
+
+    // Actualizar lista de archivos en UI
+    function updateFilesList() {
+        const filesList = document.getElementById('filesList');
+        const fileCount = document.getElementById('fileCount');
+
+        fileCount.textContent = uploadedFiles.length;
+
+        if (uploadedFiles.length === 0) {
+            filesList.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p class="text-sm">No hay archivos subidos</p></div>';
+            return;
+        }
+
+        filesList.innerHTML = uploadedFiles.map(file => `
+            <div class="file-card bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-file text-blue-600"></i>
+                        <div>
+                            <p class="font-medium text-slate-800 text-sm">${file.name}</p>
+                            <p class="text-xs text-slate-500">${formatFileSize(file.size)}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="status-badge px-2 py-1 rounded-full text-xs ${getStatusClass(file.status)}">
+                            ${getStatusText(file.status)}
+                        </span>
+                        <button onclick="removeFile('${file.id}')" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Procesar archivos
+    async function processFiles() {
+        if (uploadedFiles.length === 0 || isProcessing) return;
+
+        // Si no hay conversación activa, crear una
+        if (!currentConversationId) {
+            await createNewConversation();
+        }
+
+        isProcessing = true;
+        updateProcessButton();
+        showStatusPanel('Procesando archivos', 'Subiendo y procesando documentos...', 'loading');
+
+        let processedCount = 0;
+
+        for (let fileData of uploadedFiles) {
+            if (fileData.status === 'processed') continue;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', fileData.file);
+                formData.append('session_id', currentSessionId);
+                formData.append('conversation_id', currentConversationId);
+
+                const response = await fetch('/api/v1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    fileData.status = 'processed';
+                    processedCount++;
+                    updateProgress((processedCount / uploadedFiles.length) * 100);
+                } else {
+                    fileData.status = 'error';
+                    console.error('Error procesando archivo:', fileData.name);
+                }
+            } catch (error) {
+                fileData.status = 'error';
+                console.error('Error:', error);
+            }
+
+            updateFilesList();
+        }
+
+        showStatusPanel('Procesamiento completado', `${processedCount} archivos procesados correctamente`, 'success');
+        updateProcessButton();
+        isProcessing = false;
+
+        // Habilitar chat después de 2 segundos
+        setTimeout(() => {
+            hideStatusPanel();
+            enableChat();
+        }, 2000);
+    }
+
+    // Habilitar funcionalidad de chat
+    function enableChat() {
+        document.getElementById('questionInput').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+
+        addChatMessage('assistant', '¡Los archivos han sido procesados! Ahora puedes hacer preguntas sobre su contenido. Las respuestas estarán formateadas en **Markdown** para mejor legibilidad.');
+    }
+
+    // Enviar mensaje al chat
+    async function sendMessage(e) {
+        e.preventDefault();
+
+        const questionInput = document.getElementById('questionInput');
+        const question = questionInput.value.trim();
+
+        if (!question || isProcessing || !currentConversationId) return;
+
+        // Añadir mensaje del usuario
+        addChatMessage('user', question);
+        questionInput.value = '';
+        questionInput.disabled = true; // Deshabilitar mientras se procesa
+
+        // Mostrar indicador de typing
+        showTypingIndicator();
+
+        try {
+            const response = await fetch('/api/v1/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    conversation_id: currentConversationId,
+                    question: question,
+                    score_threshold: 0.5,
+                    use_history: true
+                })
+            });
+
+            hideTypingIndicator();
+            questionInput.disabled = false; // Rehabilitar
+
+            if (response.ok) {
+                const data = await response.json();
+                addChatMessage('assistant', data.respuesta);
+
+                // Actualizar el nombre de la conversación si es la primera pregunta
+                if (conversations.find(c => c.id === currentConversationId)?.name === 'Nueva Conversación') {
+                    await updateConversationName(currentConversationId, question.substring(0, 30) + (question.length > 30 ? '...' : ''));
+                }
+            } else {
+                const errorData = await response.json();
+                addChatMessage('assistant', `**Error:** ${errorData.detail || 'No se pudo procesar la pregunta'}`);
+            }
+        } catch (error) {
+            hideTypingIndicator();
+            questionInput.disabled = false; // Rehabilitar en caso de error
+            addChatMessage('assistant', '**Error de conexión:** Por favor, intenta nuevamente.');
+            console.error('Error en sendMessage:', error);
+        }
+    }
+
+    // Actualizar nombre de conversación
+    async function updateConversationName(conversationId, newName) {
+        try {
+            const response = await fetch(`/api/v1/conversation/${conversationId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: newName
+                })
+            });
+
+            if (response.ok) {
+                // Actualizar la lista de conversaciones
+                await loadConversations();
+            } else {
+                console.error('Error updating conversation name:', await response.text());
+            }
+        } catch (error) {
+            console.error('Error updating conversation name:', error);
+        }
+    }
+
+    function showTypingIndicator() {
+        const chatHistory = document.getElementById('chatHistory');
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typingIndicator';
+        typingDiv.className = 'chat-message-assistant p-4';
+        typingDiv.innerHTML = `
+            <div class="flex items-start space-x-3">
+                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <i class="fas fa-robot text-purple-600"></i>
+                </div>
+                <div>
+                    <p class="font-semibold text-slate-700">Asistente IA</p>
+                    <div class="typing-indicator mt-1">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        chatHistory.appendChild(typingDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function hideTypingIndicator() {
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    }
+
+    function showStatusPanel(title, message, type = 'loading') {
+        const panel = document.getElementById('statusPanel');
+        const icon = document.getElementById('statusIcon');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusMessage = document.getElementById('statusMessage');
+
+        icon.innerHTML = type === 'loading'
+            ? '<i class="fas fa-cog fa-spin text-blue-600"></i>'
+            : '<i class="fas fa-check-circle text-green-600"></i>';
+
+        statusTitle.textContent = title;
+        statusMessage.textContent = message;
+        panel.classList.remove('hidden');
+    }
+
+    function hideStatusPanel() {
+        document.getElementById('statusPanel').classList.add('hidden');
+    }
+
+    function updateProgress(percent) {
+        document.querySelector('#progressBar > div').style.width = percent + '%';
+    }
+
+    function updateProcessButton() {
+        const btn = document.getElementById('processBtn');
+        const hasFiles = uploadedFiles.length > 0;
+        const hasPending = uploadedFiles.some(f => f.status === 'pending');
+
+        btn.disabled = !hasFiles || !hasPending || isProcessing;
+        btn.innerHTML = isProcessing
+            ? '<i class="fas fa-cog fa-spin mr-2"></i>Procesando...'
+            : '<i class="fas fa-cog mr-2"></i>Procesar Archivos';
+    }
+
+    function removeFile(fileId) {
+        uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+        updateFilesList();
+        updateProcessButton();
+    }
+
+    async function clearSession() {
+        if (!confirm('¿Estás seguro de que quieres limpiar la sesión? Se perderán todas las conversaciones y archivos.')) {
+            return;
+        }
+
+        try {
+            await fetch(`/api/v1/sessions/${currentSessionId}`, {
+                method: 'DELETE'
+            });
+        } catch (error) {
+            console.error('Error clearing session:', error);
+        }
+
+        // Limpiar local
+        uploadedFiles = [];
+        conversations = [];
+        currentConversationId = null;
+        currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('notebooklm_session_id', currentSessionId);
+
+        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 12) + '...';
+        document.getElementById('activeConversationName').textContent = 'Ninguna';
+        document.getElementById('chatTitle').textContent = 'Nueva Conversación';
+        document.getElementById('chatHistory').innerHTML = `
+            <div class="chat-message-assistant p-4">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-robot text-purple-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-slate-700">Asistente IA</p>
+                        <div class="text-slate-600 mt-1 markdown-content">
+                            <p>¡Sesión reiniciada! Crea una nueva conversación y sube documentos para comenzar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        updateFilesList();
+        updateProcessButton();
+        document.getElementById('questionInput').disabled = true;
+        document.getElementById('sendBtn').disabled = true;
+
+        // Recargar lista de conversaciones (vacía)
+        loadConversations();
+    }
+
+    async function loadSessionFiles() {
+        try {
+            const response = await fetch(`/api/v1/files/${currentSessionId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.files && data.files.length > 0) {
+                    document.getElementById('fileCount').textContent = data.files.length;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading session files:', error);
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getStatusClass(status) {
+        switch (status) {
+            case 'processed': return 'bg-green-100 text-green-800';
+            case 'error': return 'bg-red-100 text-red-800';
+            default: return 'bg-yellow-100 text-yellow-800';
+        }
+    }
+
+    function getStatusText(status) {
+        switch (status) {
+            case 'processed': return 'Procesado';
+            case 'error': return 'Error';
+            default: return 'Pendiente';
+        }
+    }
+
+</script>
+{% endblock %}

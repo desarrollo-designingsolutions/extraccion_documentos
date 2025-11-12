@@ -4,272 +4,204 @@
 
 {% block extra_css %}
 <style>
-    .chat-message-user {
-        background-color: #3b82f6;
+    /* Estilos específicos para NotebookLM */
+    .sidebar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 12px 12px 4px 12px;
+        height: calc(100vh - 80px);
+        overflow-y: auto;
+    }
+    
+    .chat-container {
+        height: calc(100vh - 80px);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+    
+    .message {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        max-width: 80%;
+    }
+    
+    .user-message {
+        background-color: #e0e7ff;
         margin-left: auto;
-        max-width: 85%;
+        border-bottom-right-radius: 0.25rem;
     }
-
-    .chat-message-assistant {
-        background-color: #f8fafc;
-        color: #334155;
-        border-radius: 12px 12px 12px 4px;
+    
+    .assistant-message {
+        background-color: white;
         border: 1px solid #e2e8f0;
-        max-width: 85%;
+        margin-right: auto;
+        border-bottom-left-radius: 0.25rem;
     }
-
-    .file-card,
-    .conversation-card {
-        transition: all 0.2s ease;
-        border: 1px solid #e2e8f0;
+    
+    .message-header {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        color: #4f46e5;
     }
-
-    .file-card:hover,
-    .conversation-card:hover {
-        transform: translateY(-1px);
-        border-color: #3b82f6;
+    
+    .assistant-message .message-header {
+        color: #059669;
     }
-
-    .upload-area {
-        border: 2px dashed #cbd5e1;
-        transition: all 0.2s ease;
+    
+    .file-card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        backdrop-filter: blur(10px);
     }
-
-    .upload-area.dragover {
-        border-color: #3b82f6;
-        background-color: #f0f9ff;
+    
+    .conversation-item {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
-
+    
+    .conversation-item:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .conversation-item.active {
+        background: rgba(255, 255, 255, 0.25);
+        border-left: 4px solid white;
+    }
+    
+    .drop-zone {
+        border: 2px dashed #cbd5e0;
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .drop-zone.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        border-color: #94a3b8;
+    }
+    
+    .drop-zone:hover:not(.disabled), .drop-zone.dragover:not(.disabled) {
+        border-color: #667eea;
+        background-color: #f7fafc;
+    }
+    
+    .upload-disabled-message {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
     .typing-indicator {
         display: inline-flex;
-        gap: 4px;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background-color: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        margin-bottom: 1rem;
+        max-width: 80%;
     }
-
+    
+    .typing-dots {
+        display: flex;
+        margin-left: 0.5rem;
+    }
+    
     .typing-dot {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background-color: #64748b;
+        background-color: #94a3b8;
+        margin: 0 1px;
         animation: typing 1.4s infinite ease-in-out;
     }
-
-    .typing-dot:nth-child(1) {
-        animation-delay: -0.32s;
-    }
-
-    .typing-dot:nth-child(2) {
-        animation-delay: -0.16s;
-    }
-
+    
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    
     @keyframes typing {
-
-        0%,
-        80%,
-        100% {
-            transform: scale(0.8);
-            opacity: 0.5;
-        }
-
-        40% {
-            transform: scale(1);
-            opacity: 1;
-        }
+        0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
     }
-
-    /* Estilos mejorados para Markdown */
-    .markdown-content {
-        line-height: 1.6;
-        font-size: 0.95rem;
-    }
-
-    .markdown-content h1 {
-        font-size: 1.25rem;
+    
+    .markdown-content h1, .markdown-content h2, .markdown-content h3 {
         font-weight: 600;
-        margin: 1rem 0 0.5rem 0;
-        color: #1e293b;
-        border-bottom: 1px solid #e2e8f0;
-        padding-bottom: 0.25rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
     }
-
-    .markdown-content h2 {
-        font-size: 1.125rem;
-        font-weight: 600;
-        margin: 0.875rem 0 0.5rem 0;
-        color: #334155;
+    
+    .markdown-content h1 { font-size: 1.5rem; }
+    .markdown-content h2 { font-size: 1.25rem; }
+    .markdown-content h3 { font-size: 1.125rem; }
+    
+    .markdown-content ul, .markdown-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 1rem;
     }
-
-    .markdown-content h3 {
-        font-size: 1rem;
-        font-weight: 600;
-        margin: 0.75rem 0 0.5rem 0;
-        color: #475569;
-    }
-
-    .markdown-content p {
-        margin-bottom: 0.75rem;
-        color: #475569;
-    }
-
-    .markdown-content ul,
-    .markdown-content ol {
-        margin-bottom: 0.75rem;
-        padding-left: 1.25rem;
-        color: #475569;
-    }
-
+    
     .markdown-content li {
         margin-bottom: 0.25rem;
     }
-
+    
     .markdown-content strong {
         font-weight: 600;
-        color: #1e293b;
     }
-
+    
     .markdown-content em {
         font-style: italic;
-        color: #475569;
     }
-
-    .markdown-content table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1rem 0;
-        font-size: 0.875rem;
-    }
-
-    .markdown-content th,
-    .markdown-content td {
-        padding: 0.5rem;
-        border: 1px solid #e2e8f0;
-        text-align: left;
-    }
-
-    .markdown-content th {
-        background-color: #f8fafc;
-        font-weight: 600;
-        color: #334155;
-    }
-
-    .markdown-content blockquote {
-        border-left: 3px solid #3b82f6;
-        padding-left: 1rem;
-        margin: 1rem 0;
-        color: #64748b;
-        font-style: italic;
-    }
-
+    
     .markdown-content code {
         background-color: #f1f5f9;
         padding: 0.125rem 0.25rem;
         border-radius: 0.25rem;
+        font-family: monospace;
         font-size: 0.875rem;
-        color: #dc2626;
     }
-
-    .loader {
-        border: 2px solid #f1f5f9;
-        border-top: 2px solid #3b82f6;
-        border-radius: 50%;
-        width: 16px;
-        height: 16px;
-        animation: spin 1s linear infinite;
-        display: inline-block;
+    
+    .markdown-content pre {
+        background-color: #1e293b;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        margin-bottom: 1rem;
     }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
+    
+    .markdown-content blockquote {
+        border-left: 4px solid #cbd5e0;
+        padding-left: 1rem;
+        margin-left: 0;
+        color: #64748b;
+        font-style: italic;
     }
-
-    .conversation-active {
-        background-color: #f0f9ff;
-        border-left: 3px solid #3b82f6;
-    }
-
-    .status-badge {
-        font-size: 0.75rem;
-        padding: 0.125rem 0.5rem;
-        border-radius: 1rem;
-    }
-
-    /* Scrollbar personalizado */
-    .custom-scrollbar::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-track {
-        background: #f1f5f9;
-        border-radius: 2px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 2px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-    }
-
-    /* Mejoras de diseño minimalista */
-    .card {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-    }
-
-    .btn-primary {
-        background: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: #2563eb;
-        transform: translateY(-1px);
-    }
-
-    .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-    }
-
-    .input-field {
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        padding: 0.75rem;
-        transition: all 0.2s;
-    }
-
-    .input-field:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
-    /* Indicador de conversación vacía */
+    
     .empty-state {
         text-align: center;
         padding: 2rem;
-        color: #64748b;
+        color: rgba(255, 255, 255, 0.7);
     }
-
+    
     .empty-state i {
-        font-size: 2rem;
+        font-size: 3rem;
         margin-bottom: 1rem;
         opacity: 0.5;
     }
@@ -277,525 +209,862 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-slate-50 py-6">
-    <div class="container mx-auto px-4 max-w-7xl">
-        <!-- Header minimalista -->
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-semibold text-slate-800 mb-3">
-                <i class="fas fa-brain mr-2 text-blue-500"></i>DS Salud IA
-            </h1>
-            <p class="text-slate-600 max-w-2xl mx-auto">
-                Analiza documentos médicos con IA. Sube archivos y conversa con su contenido.
-            </p>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
-            <!-- Sidebar - Conversaciones -->
-            <div class="lg:col-span-1 space-y-5">
-                <!-- Panel de conversaciones -->
-                <div class="card p-5">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-semibold text-slate-800 flex items-center">
-                            <i class="fas fa-comments mr-2 text-blue-500"></i>
-                            Conversaciones
-                        </h3>
-                        <button id="newConversationBtn" class="btn-primary p-2 rounded-full" title="Nueva conversación">
-                            <i class="fas fa-plus text-sm"></i>
+<div class="container mx-auto px-4 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Sidebar -->
+        <div class="lg:col-span-1">
+            <div class="sidebar rounded-lg shadow-lg p-4">
+                <!-- Encabezado de sesión -->
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-2">Sesión Actual</h2>
+                    <div class="bg-white text-indigo-800 rounded-lg p-3">
+                        <p class="text-sm font-medium truncate" id="session-id">Cargando...</p>
+                        <button id="new-session-btn" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-1 px-3 rounded transition-all">
+                            <i class="fas fa-plus mr-1"></i> Nueva Sesión
                         </button>
                     </div>
-
-                    <div id="conversationsList" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
-                        <div class="text-center py-4">
-                            <div class="loader mx-auto mb-2"></div>
-                            <p class="text-slate-500 text-sm">Cargando conversaciones...</p>
+                </div>
+                
+                <!-- Tabs para archivos y conversaciones -->
+                <div class="mb-4">
+                    <div class="flex border-b border-white border-opacity-20">
+                        <button id="files-tab" class="flex-1 py-2 text-center font-medium text-white text-opacity-70">Archivos</button>
+                        <button id="conversations-tab" class="flex-1 py-2 text-center font-medium border-white">Conversaciones</button>
+                    </div>
+                </div>
+                
+                <!-- Contenido de pestaña Archivos -->
+                <div id="files-content">
+                    <!-- Área de subida de archivos - Solo habilitada con conversación activa -->
+                    <div class="mb-4">
+                        <div id="upload-disabled-message" class="upload-disabled-message hidden">
+                            <i class="fas fa-comments text-2xl mb-2"></i>
+                            <p class="text-sm">Selecciona o crea una conversación para subir archivos</p>
+                        </div>
+                        
+                        <div id="drop-zone" class="drop-zone disabled">
+                            <i class="fas fa-cloud-upload-alt text-3xl mb-2 text-white text-opacity-80"></i>
+                            <p class="text-white text-opacity-80">Selecciona una conversación para subir archivos</p>
+                            <input type="file" id="file-input" class="hidden" multiple disabled>
+                            <button id="upload-btn" class="mt-2 bg-white text-indigo-700 py-1 px-3 rounded text-sm font-medium hover:bg-opacity-90 transition-all" disabled>
+                                Seleccionar Archivos
+                            </button>
+                        </div>
+                        <div id="upload-progress" class="mt-2 hidden">
+                            <div class="flex justify-between text-sm text-white text-opacity-80 mb-1">
+                                <span>Procesando...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="w-full bg-white bg-opacity-20 rounded-full h-2">
+                                <div id="progress-bar" class="bg-white h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de archivos de la conversación actual -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-medium">Archivos de esta conversación</h3>
+                            <span id="files-count" class="bg-white bg-opacity-20 text-xs rounded-full px-2 py-1">0</span>
+                        </div>
+                        <div id="files-list" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                            <div class="empty-state">
+                                <i class="fas fa-folder-open"></i>
+                                <p>No hay archivos en esta conversación</p>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Información de sesión -->
-                <div class="card p-5">
-                    <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
-                        <i class="fas fa-info-circle mr-2 text-slate-500"></i>
-                        Información
-                    </h3>
-
-                    <div class="space-y-2 text-sm">
-                        <div class="flex items-center justify-between">
-                            <span class="text-slate-600">Sesión:</span>
-                            <span id="sessionId"
-                                class="font-mono text-slate-800 bg-slate-100 px-2 py-1 rounded text-xs"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-slate-600">Conversación:</span>
-                            <span id="activeConversationName" class="font-medium text-blue-600">Ninguna</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-slate-600">Archivos:</span>
-                            <span id="fileCount" class="font-medium text-slate-800">0</span>
-                        </div>
+                
+                <!-- Contenido de pestaña Conversaciones -->
+                <div id="conversations-content" class="hidden">
+                    <!-- Botón para nueva conversación -->
+                    <div class="mb-4">
+                        <button id="new-conversation-btn" class="w-full bg-white text-indigo-700 py-2 px-3 rounded font-medium hover:bg-opacity-90 transition-all">
+                            <i class="fas fa-plus mr-2"></i> Nueva Conversación
+                        </button>
                     </div>
-                </div>
-            </div>
-
-            <!-- Área principal - Gestión de archivos y chat -->
-            <div class="lg:col-span-4">
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
-                    <!-- Panel de gestión de archivos -->
-                    <div class="lg:col-span-1 space-y-5">
-                        <!-- Panel de subida -->
-                        <div class="card p-5">
-                            <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
-                                <i class="fas fa-cloud-upload-alt mr-2 text-blue-500"></i>
-                                Subir Documentos
-                            </h3>
-
-                            <!-- Área de dropzone -->
-                            <div id="uploadArea" class="upload-area rounded-lg p-4 text-center cursor-pointer mb-3">
-                                <i class="fas fa-file-alt text-3xl text-slate-400 mb-2"></i>
-                                <p class="text-slate-600 text-sm mb-1">Arrastra archivos aquí</p>
-                                <p class="text-xs text-slate-500">PDF, imágenes, Word, Excel</p>
-                                <input type="file" id="fileInput" multiple class="hidden"
-                                    accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx">
-                            </div>
-
-                            <!-- Botones de acción -->
-                            <div class="space-y-2">
-                                <button id="processBtn"
-                                    class="btn-primary w-full py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
-                                    <i class="fas fa-cog mr-2"></i>
-                                    Procesar Archivos
-                                </button>
-                                <button id="clearSessionBtn"
-                                    class="w-full bg-slate-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-slate-700 transition-colors flex items-center justify-center">
-                                    <i class="fas fa-trash mr-2"></i>
-                                    Limpiar Sesión
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Lista de archivos -->
-                        <div class="card p-5">
-                            <h3 class="font-semibold text-slate-800 mb-3 flex items-center">
-                                <i class="fas fa-files mr-2 text-green-500"></i>
-                                Archivos Subidos
-                            </h3>
-                            <div id="filesList" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-                                <div class="empty-state">
-                                    <i class="fas fa-folder-open"></i>
-                                    <p class="text-sm">No hay archivos subidos</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Área de chat -->
-                    <div class="lg:col-span-3">
-                        <div class="card h-[600px] flex flex-col">
-                            <!-- Header del chat -->
-                            <div class="border-b border-slate-200 p-4 flex justify-between items-center">
-                                <div>
-                                    <h3 class="font-semibold text-slate-800 flex items-center">
-                                        <i class="fas fa-comments mr-2 text-purple-500"></i>
-                                        <span id="chatTitle">Nueva Conversación</span>
-                                    </h3>
-                                    <p class="text-sm text-slate-500">Haz preguntas sobre tus documentos</p>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button id="clearChatBtn"
-                                        class="p-2 text-slate-500 hover:text-orange-500 transition-colors"
-                                        title="Limpiar chat">
-                                        <i class="fas fa-eraser"></i>
-                                    </button>
-                                    <button id="deleteConversationBtn"
-                                        class="p-2 text-slate-500 hover:text-red-500 transition-colors"
-                                        title="Eliminar conversación">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Historial del chat -->
-                            <div id="chatHistory" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                <div class="chat-message-assistant p-4">
-                                    <div class="flex items-start space-x-3">
-                                        <div
-                                            class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <i class="fas fa-robot text-purple-600 text-sm"></i>
-                                        </div>
-                                        <div class="flex-1">
-                                            <p class="font-semibold text-slate-700 mb-1">Asistente IA</p>
-                                            <div class="text-slate-600 markdown-content">
-                                                <p>¡Hola! Selecciona una conversación existente o crea una nueva. Luego
-                                                    sube algunos documentos y podré ayudarte a analizar su contenido.
-                                                </p>
-                                                <p>Puedes preguntarme sobre:</p>
-                                                <ul>
-                                                    <li>Información de pacientes</li>
-                                                    <li>Facturas y autorizaciones</li>
-                                                    <li>Procedimientos médicos</li>
-                                                    <li>Resúmenes de documentos</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Área de entrada -->
-                            <div class="border-t border-slate-200 p-4">
-                                <form id="chatForm" class="space-y-3">
-                                    <div class="flex space-x-3">
-                                        <input type="text" id="questionInput"
-                                            placeholder="Escribe tu pregunta sobre los documentos..."
-                                            class="input-field flex-1" disabled>
-                                        <button type="submit" id="sendBtn"
-                                            class="btn-primary px-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
-                                            <i class="fas fa-paper-plane mr-2"></i>
-                                            Enviar
-                                        </button>
-                                    </div>
-                                    <div class="flex flex-wrap gap-2">
-                                        <button type="button"
-                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
-                                            Resumen del documento
-                                        </button>
-                                        <button type="button"
-                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
-                                            Extraer datos importantes
-                                        </button>
-                                        <button type="button"
-                                            class="suggestion-btn text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full hover:bg-slate-200 transition-colors">
-                                            Información del paciente
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Información de estado -->
-                        <div id="statusPanel" class="card p-4 mt-4 hidden">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center space-x-3">
-                                    <div id="statusIcon" class="w-8 h-8 rounded-full flex items-center justify-center">
-                                        <i class="fas fa-cog fa-spin text-blue-500"></i>
-                                    </div>
-                                    <div>
-                                        <p id="statusTitle" class="font-semibold text-slate-800">Procesando archivos</p>
-                                        <p id="statusMessage" class="text-sm text-slate-600">Los archivos se están
-                                            procesando...</p>
-                                    </div>
-                                </div>
-                                <div id="progressBar" class="w-32 bg-slate-200 rounded-full h-2">
-                                    <div class="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                                        style="width: 0%"></div>
-                                </div>
+                    
+                    <!-- Lista de conversaciones -->
+                    <div>
+                        <h3 class="font-medium mb-2">Tus Conversaciones</h3>
+                        <div id="conversations-list" class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                            <div class="empty-state">
+                                <i class="fas fa-comments"></i>
+                                <p>No hay conversaciones</p>
+                                <p class="text-sm mt-2">Crea tu primera conversación</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        
+        <!-- Área principal de chat -->
+        <div class="lg:col-span-3">
+            <div class="chat-container bg-white rounded-lg shadow-lg">
+                <!-- Encabezado del chat -->
+                <div class="border-b border-gray-200 p-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 id="conversation-title" class="text-xl font-bold text-gray-800">Selecciona una Conversación</h2>
+                            <p id="conversation-info" class="text-sm text-gray-500">Crea o selecciona una conversación para comenzar</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="clear-chat-btn" class="text-gray-500 hover:text-gray-700 transition-colors hidden" title="Limpiar chat">
+                                <i class="fas fa-broom"></i>
+                            </button>
+                            <button id="delete-conversation-btn" class="text-red-500 hover:text-red-700 transition-colors hidden" title="Eliminar conversación">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Área de mensajes -->
+                <div id="messages-container" class="messages-container custom-scrollbar">
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-comments text-4xl mb-2 text-gray-300"></i>
+                        <p class="text-lg font-medium text-gray-600">Bienvenido a DS Salud IA</p>
+                        <p class="text-gray-500 mt-2">Crea una conversación para comenzar a chatear con tus documentos</p>
+                        <button id="quick-create-conversation" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg transition-all">
+                            <i class="fas fa-plus mr-2"></i> Crear Primera Conversación
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Área de entrada - Solo habilitada con conversación activa -->
+                <div class="border-t border-gray-200 p-4">
+                    <form id="chat-form" class="flex space-x-2">
+                        <div class="flex-1">
+                            <input 
+                                type="text" 
+                                id="question-input" 
+                                placeholder="Selecciona una conversación para comenzar..." 
+                                class="w-full border border-gray-300 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                autocomplete="off"
+                                disabled
+                            >
+                        </div>
+                        <button 
+                            type="submit" 
+                            id="send-btn"
+                            class="bg-gray-400 text-white py-3 px-6 rounded-lg transition-all cursor-not-allowed"
+                            disabled
+                        >
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para nueva conversación -->
+<div id="new-conversation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-xl font-bold mb-4">Nueva Conversación</h3>
+        <form id="new-conversation-form">
+            <div class="mb-4">
+                <label for="conversation-name" class="block text-sm font-medium text-gray-700 mb-1">Nombre de la conversación</label>
+                <input 
+                    type="text" 
+                    id="conversation-name" 
+                    class="w-full border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Mi conversación"
+                    value="Nueva Conversación"
+                >
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" id="cancel-conversation-btn" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-all">
+                    Crear
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Variables globales
-    let currentSessionId = null;
-    let currentConversationId = null;
-    let uploadedFiles = [];
-    let isProcessing = false;
-    let conversations = [];
+    // Estado de la aplicación
+    let appState = {
+        sessionId: null,
+        currentConversationId: null,
+        currentConversation: null,
+        conversations: [],
+        files: [],
+        isProcessing: false
+    };
 
     // Inicialización
-    document.addEventListener('DOMContentLoaded', function () {
-        initializeSession();
+    document.addEventListener('DOMContentLoaded', function() {
+        switchTab('conversations')
+        initializeApp();
         setupEventListeners();
-        loadConversations();
     });
 
-    // Inicializar sesión
-    function initializeSession() {
-        currentSessionId = localStorage.getItem('notebooklm_session_id');
-        if (!currentSessionId) {
-            currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('notebooklm_session_id', currentSessionId);
+    // Inicializar la aplicación
+    function initializeApp() {
+        // Generar o recuperar sessionId
+        const savedSessionId = localStorage.getItem('notebooklm_session_id');
+        if (savedSessionId) {
+            appState.sessionId = savedSessionId;
+        } else {
+            appState.sessionId = generateSessionId();
+            localStorage.setItem('notebooklm_session_id', appState.sessionId);
         }
-
-        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 10) + '...';
-        loadSessionFiles();
+        
+        document.getElementById('session-id').textContent = appState.sessionId;
+        
+        // Cargar conversaciones
+        loadConversations();
+        
+        // Estado inicial: sin conversación activa
+        updateUIForNoConversation();
     }
 
     // Configurar event listeners
     function setupEventListeners() {
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-
-        uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
+        // Tabs de sidebar
+        document.getElementById('files-tab').addEventListener('click', () => switchTab('files'));
+        document.getElementById('conversations-tab').addEventListener('click', () => switchTab('conversations'));
+        
+        // Subida de archivos
+        document.getElementById('upload-btn').addEventListener('click', () => {
+            if (!appState.currentConversationId) return;
+            document.getElementById('file-input').click();
         });
-        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
-        });
-
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-        // Botones
-        document.getElementById('processBtn').addEventListener('click', processFiles);
-        document.getElementById('clearSessionBtn').addEventListener('click', clearSession);
-        document.getElementById('newConversationBtn').addEventListener('click', createNewConversation);
-        document.getElementById('clearChatBtn').addEventListener('click', clearCurrentChat);
-        document.getElementById('deleteConversationBtn').addEventListener('click', deleteCurrentConversation);
-        document.getElementById('chatForm').addEventListener('submit', sendMessage);
-
-        // Botones de sugerencia
-        document.querySelectorAll('.suggestion-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.getElementById('questionInput').value = e.target.textContent;
-            });
+        document.getElementById('file-input').addEventListener('change', handleFileSelect);
+        setupDragAndDrop();
+        
+        // Conversaciones
+        document.getElementById('new-conversation-btn').addEventListener('click', showNewConversationModal);
+        document.getElementById('quick-create-conversation').addEventListener('click', showNewConversationModal);
+        document.getElementById('new-conversation-form').addEventListener('submit', createNewConversation);
+        document.getElementById('cancel-conversation-btn').addEventListener('click', hideNewConversationModal);
+        
+        // Chat
+        document.getElementById('chat-form').addEventListener('submit', sendMessage);
+        document.getElementById('clear-chat-btn').addEventListener('click', clearChat);
+        document.getElementById('delete-conversation-btn').addEventListener('click', deleteCurrentConversation);
+        
+        // Nueva sesión
+        document.getElementById('new-session-btn').addEventListener('click', createNewSession);
+        
+        // Tecla Enter para enviar mensaje
+        document.getElementById('question-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !this.disabled) {
+                e.preventDefault();
+                document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+            }
         });
     }
 
-    // Cargar conversaciones
-    async function loadConversations() {
-        showLoaderInConversationsList();
+    // Funciones de utilidad
+    function generateSessionId() {
+        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
 
-        try {
-            const response = await fetch(`/api/v1/conversations/${currentSessionId}`);
-            if (response.ok) {
-                const data = await response.json();
-                conversations = data.conversations || [];
-                renderConversationsList();
+    function switchTab(tabName) {
+        const filesTab = document.getElementById('files-tab');
+        const conversationsTab = document.getElementById('conversations-tab');
+        const filesContent = document.getElementById('files-content');
+        const conversationsContent = document.getElementById('conversations-content');
 
-                // Si hay conversaciones, cargar la más reciente
-                if (conversations.length > 0) {
-                    const mostRecent = conversations.reduce((latest, current) =>
-                        new Date(current.updated_at) > new Date(latest.updated_at) ? current : latest
-                    );
-                    loadConversation(mostRecent.id);
-                }
-            } else {
-                console.error('Error loading conversations');
-                showErrorInConversationsList();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showErrorInConversationsList();
+        filesTab.classList.remove('border-b-2');
+        conversationsTab.classList.remove('border-b-2');
+        
+        if (tabName === 'files') {
+            filesTab.classList.add('border-b-2');
+
+            filesTab.classList.add('border-white');
+            filesTab.classList.remove('text-opacity-70');
+            conversationsTab.classList.remove('border-white');
+            conversationsTab.classList.add('text-opacity-70');
+            filesContent.classList.remove('hidden');
+            conversationsContent.classList.add('hidden');
+        } else {
+            conversationsTab.classList.add('border-b-2');
+
+            conversationsTab.classList.add('border-white');
+            conversationsTab.classList.remove('text-opacity-70');
+            filesTab.classList.remove('border-white');
+            filesTab.classList.add('text-opacity-70');
+            conversationsContent.classList.remove('hidden');
+            filesContent.classList.add('hidden');
         }
     }
 
-    // Renderizar lista de conversaciones
-    function renderConversationsList() {
-        const conversationsList = document.getElementById('conversationsList');
+    // Funciones para manejar el estado de la UI
+    function updateUIForNoConversation() {
+        // Deshabilitar subida de archivos
+        document.getElementById('drop-zone').classList.add('disabled');
+        document.getElementById('upload-btn').disabled = true;
+        document.getElementById('file-input').disabled = true;
+        document.getElementById('upload-disabled-message').classList.remove('hidden');
+        
+        // Deshabilitar chat
+        document.getElementById('question-input').disabled = true;
+        document.getElementById('question-input').placeholder = "Selecciona una conversación para comenzar...";
+        document.getElementById('send-btn').disabled = true;
+        document.getElementById('send-btn').classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        document.getElementById('send-btn').classList.add('bg-gray-400', 'cursor-not-allowed');
+        
+        // Ocultar botones de conversación
+        document.getElementById('clear-chat-btn').classList.add('hidden');
+        document.getElementById('delete-conversation-btn').classList.add('hidden');
+        
+        // Actualizar encabezado
+        document.getElementById('conversation-title').textContent = "Selecciona una Conversación";
+        document.getElementById('conversation-info').textContent = "Crea o selecciona una conversación para comenzar";
+        
+        // Mostrar estado vacío en archivos
+        document.getElementById('files-count').textContent = "0";
+    }
 
-        if (conversations.length === 0) {
-            conversationsList.innerHTML = `
-                <div class="empty-state py-4">
-                    <i class="fas fa-comments"></i>
-                    <p class="text-sm">No hay conversaciones</p>
-                    <button id="createFirstConversation" class="text-blue-500 hover:text-blue-700 text-sm font-medium mt-2">
-                        Crear primera conversación
-                    </button>
-                </div>
-            `;
-            document.getElementById('createFirstConversation').addEventListener('click', createNewConversation);
+    function updateUIForActiveConversation() {
+        // Habilitar subida de archivos
+        document.getElementById('drop-zone').classList.remove('disabled');
+        document.getElementById('upload-btn').disabled = false;
+        document.getElementById('file-input').disabled = false;
+        document.getElementById('upload-disabled-message').classList.add('hidden');
+        
+        // Habilitar chat
+        document.getElementById('question-input').disabled = false;
+        document.getElementById('question-input').placeholder = "Escribe tu pregunta...";
+        document.getElementById('send-btn').disabled = false;
+        document.getElementById('send-btn').classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+        document.getElementById('send-btn').classList.remove('bg-gray-400', 'cursor-not-allowed');
+        
+        // Mostrar botones de conversación
+        document.getElementById('clear-chat-btn').classList.remove('hidden');
+        document.getElementById('delete-conversation-btn').classList.remove('hidden');
+    }
+
+    // Funciones de archivos
+    function setupDragAndDrop() {
+        const dropZone = document.getElementById('drop-zone');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                if (!dropZone.classList.contains('disabled')) {
+                    dropZone.classList.add('dragover');
+                }
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+        
+        dropZone.addEventListener('drop', handleDrop, false);
+    }
+
+    function handleDrop(e) {
+        if (!appState.currentConversationId) return;
+        
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+
+    function handleFileSelect(e) {
+        if (!appState.currentConversationId) return;
+        
+        const files = e.target.files;
+        handleFiles(files);
+    }
+
+    function handleFiles(files) {
+        if (files.length === 0 || !appState.currentConversationId) return;
+        
+        const progressContainer = document.getElementById('upload-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const progressPercent = document.getElementById('progress-percent');
+        
+        progressContainer.classList.remove('hidden');
+        
+        // Simular progreso
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 5;
+            progressBar.style.width = `${progress}%`;
+            progressPercent.textContent = `${progress}%`;
+            
+            if (progress >= 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    progressContainer.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                    progressPercent.textContent = '0%';
+                }, 500);
+            }
+        }, 100);
+        
+        // Subir archivos
+        Array.from(files).forEach(file => {
+            uploadFile(file);
+        });
+    }
+
+    async function uploadFile(file) {
+        if (!appState.currentConversationId) {
+            alert('Debes tener una conversación activa para subir archivos');
             return;
         }
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('session_id', appState.sessionId);
+        formData.append('conversation_id', appState.currentConversationId);
+        
+        try {
+            const response = await fetch('/api/v1/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Archivo subido:', result);
+                // Recargar la conversación actual para actualizar la lista de archivos
+                if (appState.currentConversationId) {
+                    switchToConversation(appState.currentConversationId);
+                }
+            } else {
+                console.error('Error al subir archivo:', response.statusText);
+                alert('Error al subir el archivo');
+            }
+        } catch (error) {
+            console.error('Error al subir archivo:', error);
+            alert('Error al subir el archivo');
+        }
+    }
 
-        // Ordenar conversaciones por fecha de actualización (más reciente primero)
-        const sortedConversations = [...conversations].sort((a, b) =>
-            new Date(b.updated_at) - new Date(a.updated_at)
-        );
-
-        conversationsList.innerHTML = sortedConversations.map(conv => `
-            <div class="conversation-card rounded p-3 cursor-pointer ${conv.id == currentConversationId ? 'conversation-active' : ''}" 
-                 data-conversation-id="${conv.id}">
-                <div class="flex items-center justify-between">
-                    <div class="flex-1 min-w-0">
-                        <p class="font-medium text-slate-800 text-sm truncate">${conv.name || 'Conversación sin nombre'}</p>
-                        <p class="text-xs text-slate-500 mt-1">${formatRelativeTime(conv.updated_at)}</p>
+    function renderFilesList() {
+        const filesList = document.getElementById('files-list');
+        const filesCount = document.getElementById('files-count');
+        
+        if (!appState.currentConversation || !appState.currentConversation.files || appState.currentConversation.files.length === 0) {
+            filesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-folder-open"></i>
+                    <p>No hay archivos en esta conversación</p>
+                </div>
+            `;
+            filesCount.textContent = "0";
+            return;
+        }
+        
+        filesCount.textContent = appState.currentConversation.files.length;
+        
+        filesList.innerHTML = appState.currentConversation.files.map(file => `
+            <div class="file-card">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h4 class="font-medium truncate">${file.original_filename}</h4>
+                        <p class="text-xs text-white text-opacity-70 mt-1">
+                            ${formatFileSize(file.size)} • ${formatDate(file.created_at)}
+                        </p>
                     </div>
-                    <button class="delete-conv-btn text-slate-400 hover:text-red-500 p-1 rounded transition-colors" data-conv-id="${conv.id}">
-                        <i class="fas fa-times text-xs"></i>
-                    </button>
                 </div>
             </div>
         `).join('');
-
-        // Event listeners
-        document.querySelectorAll('.conversation-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (!e.target.closest('.delete-conv-btn')) {
-                    const convId = card.getAttribute('data-conversation-id');
-                    loadConversation(convId);
-                }
-            });
-        });
-
-        document.querySelectorAll('.delete-conv-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const convId = btn.getAttribute('data-conv-id');
-                deleteConversation(convId);
-            });
-        });
     }
 
-    // Cargar una conversación específica
-    async function loadConversation(conversationId) {
-        showLoaderInChat();
+    // Funciones de conversaciones
+    function showNewConversationModal() {
+        document.getElementById('new-conversation-modal').classList.remove('hidden');
+    }
 
+    function hideNewConversationModal() {
+        document.getElementById('new-conversation-modal').classList.add('hidden');
+    }
+
+    async function createNewConversation(e) {
+        e.preventDefault();
+        
+        const name = document.getElementById('conversation-name').value || 'Nueva Conversación';
+        
         try {
-            const response = await fetch(`/api/v1/conversations/${conversationId}`);
+            const response = await fetch('/api/v1/conversations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: appState.sessionId,
+                    name: name
+                })
+            });
+            
             if (response.ok) {
-                const data = await response.json();
-                currentConversationId = conversationId;
-
-                // Actualizar UI
-                document.getElementById('chatTitle').textContent = data.name || 'Conversación sin nombre';
-                document.getElementById('activeConversationName').textContent = data.name || 'Conversación sin nombre';
-
-                // Limpiar y cargar historial de mensajes
-                const chatHistory = document.getElementById('chatHistory');
-                chatHistory.innerHTML = '';
-
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(msg => {
-                        addChatMessage(msg.role, msg.content, false);
-                    });
-                } else {
-                    addChatMessage('assistant',
-                        'Esta es una conversación nueva. Sube algunos documentos y haz preguntas sobre ellos.',
-                        false
-                    );
-                }
-
-                // Actualizar lista de conversaciones para resaltar la activa
-                renderConversationsList();
-
-                // Habilitar chat si hay archivos procesados
-                if (data.files && data.files.length > 0) {
-                    enableChat();
-                } else {
-                    disableChat();
-                }
-
-                // Scroll al final del chat
-                chatHistory.scrollTop = chatHistory.scrollHeight;
+                const result = await response.json();
+                hideNewConversationModal();
+                loadConversations();
+                switchToConversation(result.conversation_id);
             } else {
-                console.error('Error loading conversation');
-                showErrorInChat();
+                console.error('Error al crear conversación:', response.statusText);
+                alert('Error al crear la conversación');
             }
         } catch (error) {
-            console.error('Error:', error);
-            showErrorInChat();
+            console.error('Error al crear conversación:', error);
+            alert('Error al crear la conversación');
         }
     }
 
-    // Funciones de UI mejoradas
-    function showLoaderInConversationsList() {
-        const conversationsList = document.getElementById('conversationsList');
-        conversationsList.innerHTML = `
-            <div class="text-center py-4">
-                <div class="loader mx-auto mb-2"></div>
-                <p class="text-slate-500 text-sm">Cargando conversaciones...</p>
-            </div>
-        `;
+    async function loadConversations() {
+        try {
+            const response = await fetch(`/api/v1/conversations/${appState.sessionId}`);
+            
+            if (response.ok) {
+                const result = await response.json();
+                appState.conversations = result.conversations || [];
+                renderConversationsList();
+            } else {
+                console.error('Error al cargar conversaciones:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error al cargar conversaciones:', error);
+        }
     }
 
-    function showErrorInConversationsList() {
-        const conversationsList = document.getElementById('conversationsList');
-        conversationsList.innerHTML = `
-            <div class="empty-state py-4">
-                <i class="fas fa-exclamation-triangle text-amber-500"></i>
-                <p class="text-sm">Error al cargar</p>
-                <button id="retryLoadConversations" class="text-blue-500 hover:text-blue-700 text-sm font-medium mt-2">
-                    Reintentar
-                </button>
-            </div>
-        `;
-        document.getElementById('retryLoadConversations').addEventListener('click', loadConversations);
-    }
-
-    function showLoaderInChat() {
-        const chatHistory = document.getElementById('chatHistory');
-        chatHistory.innerHTML = `
-            <div class="flex justify-center items-center h-32">
-                <div class="loader mr-3"></div>
-                <p class="text-slate-500">Cargando conversación...</p>
-            </div>
-        `;
-    }
-
-    function showErrorInChat() {
-        const chatHistory = document.getElementById('chatHistory');
-        chatHistory.innerHTML = `
-            <div class="chat-message-assistant p-4">
-                <div class="flex items-start space-x-3">
-                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-robot text-purple-600"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-slate-700">Asistente IA</p>
-                        <div class="text-slate-600 mt-1">
-                            <p>Lo siento, hubo un error al cargar la conversación. Intenta nuevamente.</p>
-                        </div>
-                    </div>
+    function renderConversationsList() {
+        const conversationsList = document.getElementById('conversations-list');
+        
+        if (appState.conversations.length === 0) {
+            conversationsList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-comments"></i>
+                    <p>No hay conversaciones</p>
+                    <p class="text-sm mt-2">Crea tu primera conversación</p>
                 </div>
-            </div>
-        `;
-    }
-
-    // Eliminar conversación actual
-    async function deleteCurrentConversation() {
-        if (!currentConversationId) return;
-
-        if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
+            `;
             return;
         }
-
-        await deleteConversation(currentConversationId);
+        
+        conversationsList.innerHTML = appState.conversations.map(conv => `
+            <div class="conversation-item ${conv.id === appState.currentConversationId ? 'active' : ''}" 
+                 data-conversation-id="${conv.id}">
+                <h4 class="font-medium truncate">${conv.name}</h4>
+                <p class="text-xs text-white text-opacity-70 mt-1">
+                    ${formatDate(conv.updated_at)} • ${conv.message_count || 0} mensajes
+                </p>
+            </div>
+        `).join('');
+        
+        // Añadir event listeners a los elementos de conversación
+        document.querySelectorAll('.conversation-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const conversationId = parseInt(this.getAttribute('data-conversation-id'));
+                switchToConversation(conversationId);
+            });
+        });
     }
 
-    // Funciones de chat mejoradas
-    function addChatMessage(role, content, scroll = true) {
-        const chatHistory = document.getElementById('chatHistory');
-        const messageDiv = document.createElement('div');
-
-        messageDiv.className = `chat-message-${role} p-4`;
-
-        let contentHTML = content;
-        if (role === 'assistant') {
-            contentHTML = convertMarkdownToHTML(content);
-        } else {
-            contentHTML = content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    async function switchToConversation(conversationId) {
+        try {
+            const response = await fetch(`/api/v1/conversation/${conversationId}`);
+            
+            if (response.ok) {
+                const conversation = await response.json();
+                appState.currentConversationId = conversationId;
+                appState.currentConversation = conversation;
+                
+                // Actualizar UI
+                updateUIForActiveConversation();
+                document.getElementById('conversation-title').textContent = conversation.name;
+                document.getElementById('conversation-info').textContent = 
+                    `${conversation.files.length} archivos • ${conversation.messages.length} mensajes`;
+                
+                // Renderizar mensajes
+                renderMessages(conversation.messages);
+                
+                // Renderizar archivos
+                renderFilesList();
+                
+                // Actualizar lista de conversaciones
+                renderConversationsList();
+                
+                console.log('Conversación cargada:', conversation);
+            } else {
+                console.error('Error al cargar conversación:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error al cargar conversación:', error);
         }
+    }
 
-        messageDiv.innerHTML = `
-            <div class="flex items-start space-x-3 ${role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}">
-                <div class="w-8 h-8 ${role === 'user' ? 'bg-blue-100' : 'bg-purple-100'} rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="${role === 'user' ? 'fas fa-user text-blue-600' : 'fas fa-robot text-purple-600'} text-sm"></i>
+    function renderMessages(messages) {
+        const messagesContainer = document.getElementById('messages-container');
+        
+        if (!messages || messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-comments text-4xl mb-2 text-gray-300"></i>
+                    <p>Comienza una conversación preguntando sobre tus documentos</p>
                 </div>
-                <div class="${role === 'user' ? 'text-right' : ''} flex-1 min-w-0">
-                    <p class="font-semibold text-slate-700 mb-1 text-sm">${role === 'user' ? 'Tú' : 'Asistente IA'}</p>
-                    <div class="markdown-content text-slate-600">${contentHTML}</div>
+            `;
+            return;
+        }
+        
+        messagesContainer.innerHTML = messages.map(msg => `
+            <div class="message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}">
+                <div class="message-header">
+                    ${msg.role === 'user' ? 'Tú' : 'DS Salud IA'}
+                </div>
+                <div class="markdown-content">
+                    ${convertMarkdownToHTML(msg.content)}
+                </div>
+                ${msg.metadata ? `
+                <div class="mt-2 text-xs text-gray-500">
+                    ${msg.metadata.chunks_utilizados ? `Chunks: ${msg.metadata.chunks_utilizados} | ` : ''}
+                    ${msg.metadata.distancia_promedio ? `Distancia: ${msg.metadata.distancia_promedio.toFixed(3)}` : ''}
+                </div>
+                ` : ''}
+            </div>
+        `).join('');
+        
+        // Scroll al final
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    async function deleteCurrentConversation() {
+        if (!appState.currentConversationId) {
+            alert('No hay conversación activa para eliminar');
+            return;
+        }
+        
+        if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Se eliminarán todos los mensajes y archivos asociados.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/v1/conversations/${appState.currentConversationId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                appState.currentConversationId = null;
+                appState.currentConversation = null;
+                updateUIForNoConversation();
+                renderMessages([]);
+                renderFilesList();
+                loadConversations();
+            } else {
+                console.error('Error al eliminar conversación:', response.statusText);
+                alert('Error al eliminar la conversación');
+            }
+        } catch (error) {
+            console.error('Error al eliminar conversación:', error);
+            alert('Error al eliminar la conversación');
+        }
+    }
+
+    // Funciones de chat
+    async function sendMessage(e) {
+        e.preventDefault();
+        
+        if (appState.isProcessing || !appState.currentConversationId) return;
+        
+        const questionInput = document.getElementById('question-input');
+        const question = questionInput.value.trim();
+        
+        if (!question) return;
+        
+        // Limpiar input
+        questionInput.value = '';
+        
+        // Mostrar mensaje del usuario
+        const messagesContainer = document.getElementById('messages-container');
+        
+        // Si es el primer mensaje, limpiar el placeholder
+        if (messagesContainer.querySelector('.text-center')) {
+            messagesContainer.innerHTML = '';
+        }
+        
+        // Añadir mensaje del usuario
+        const userMessageHtml = `
+            <div class="message user-message">
+                <div class="message-header">Tú</div>
+                <div>${escapeHtml(question)}</div>
+            </div>
+        `;
+        messagesContainer.innerHTML += userMessageHtml;
+        
+        // Mostrar indicador de escritura
+        const typingIndicator = `
+            <div class="typing-indicator">
+                <span>Asistente está escribiendo</span>
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
                 </div>
             </div>
         `;
+        messagesContainer.innerHTML += typingIndicator;
+        
+        // Scroll al final
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // Enviar pregunta al servidor
+        appState.isProcessing = true;
+        
+        try {
+            const response = await fetch('/api/v1/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: appState.sessionId,
+                    conversation_id: appState.currentConversationId,
+                    question: question,
+                    score_threshold: 0.5,
+                    use_history: true
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                
+                // Remover indicador de escritura
+                const typingIndicator = messagesContainer.querySelector('.typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
 
-        chatHistory.appendChild(messageDiv);
-        if (scroll) {
-            chatHistory.scrollTop = chatHistory.scrollHeight;
+                // Añadir respuesta del asistente
+                const assistantMessageHtml = `
+                    <div class="message assistant-message">
+                        <div class="message-header">DS Salud IA</div>
+                        <div class="markdown-content">${convertMarkdownToHTML(result.respuesta)}</div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            Chunks: ${result.chunks_utilizados} | Distancia: ${result.distancia.toFixed(3)}
+                        </div>
+                    </div>
+                `;
+                messagesContainer.innerHTML += assistantMessageHtml;
+                
+                // Recargar la conversación para actualizar el historial
+                switchToConversation(appState.currentConversationId);
+                
+                // Scroll al final
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error al enviar mensaje:', error);
+            
+            // Remover indicador de escritura
+            const typingIndicator = messagesContainer.querySelector('.typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+            
+            // Mostrar mensaje de error
+            const errorMessageHtml = `
+                <div class="message assistant-message">
+                    <div class="message-header">Error</div>
+                    <div>Lo siento, ha ocurrido un error al procesar tu pregunta. Por favor, inténtalo de nuevo.</div>
+                </div>
+            `;
+            messagesContainer.innerHTML += errorMessageHtml;
+            
+            // Scroll al final
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } finally {
+            appState.isProcessing = false;
         }
     }
 
-    // Convertir Markdown a HTML mejorado
+    function clearChat() {
+        if (!appState.currentConversationId) {
+            return;
+        }
+        
+        if (!confirm('¿Estás seguro de que quieres limpiar el historial de esta conversación?')) {
+            return;
+        }
+        
+        fetch(`/api/v1/conversations/${appState.currentConversationId}/messages`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                renderMessages([]);
+                // Recargar la conversación para actualizar el estado
+                switchToConversation(appState.currentConversationId);
+            } else {
+                console.error('Error al limpiar mensajes:', response.statusText);
+                alert('Error al limpiar el historial');
+            }
+        })
+        .catch(error => {
+            console.error('Error al limpiar mensajes:', error);
+            alert('Error al limpiar el historial');
+        });
+    }
+
+    function createNewSession() {
+        if (confirm('¿Estás seguro de que quieres crear una nueva sesión? Se perderán todas las conversaciones y archivos actuales.')) {
+            appState.sessionId = generateSessionId();
+            localStorage.setItem('notebooklm_session_id', appState.sessionId);
+            appState.currentConversationId = null;
+            appState.currentConversation = null;
+            appState.conversations = [];
+            appState.files = [];
+            
+            document.getElementById('session-id').textContent = appState.sessionId;
+            updateUIForNoConversation();
+            renderMessages([]);
+            renderFilesList();
+            renderConversationsList();
+        }
+    }
+
+    // Funciones de utilidad
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     function convertMarkdownToHTML(markdown) {
         if (!markdown) return '';
 
@@ -814,489 +1083,5 @@
             .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
             .replace(/(<br>){3,}/g, '<br><br>');
     }
-
-    // Resto de funciones permanecen similares pero con mejoras de UX
-    function enableChat() {
-        document.getElementById('questionInput').disabled = false;
-        document.getElementById('sendBtn').disabled = false;
-        document.getElementById('questionInput').focus();
-    }
-
-    function disableChat() {
-        document.getElementById('questionInput').disabled = true;
-        document.getElementById('sendBtn').disabled = true;
-    }
-
-    // Función para formatear tiempo relativo
-    function formatRelativeTime(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Ahora';
-        if (diffMins < 60) return `Hace ${diffMins} min`;
-        if (diffHours < 24) return `Hace ${diffHours} h`;
-        if (diffDays < 7) return `Hace ${diffDays} d`;
-        return date.toLocaleDateString('es-ES');
-    }
-
-    async function createNewConversation() {
-        showLoaderInConversationsList();
-
-        try {
-            const response = await fetch('/api/v1/conversations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: currentSessionId,
-                    name: 'Nueva Conversación'
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                await loadConversations();
-                loadConversation(data.conversation_id);
-            } else {
-                console.error('Error creating conversation');
-                showErrorInConversationsList();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showErrorInConversationsList();
-        }
-    }
-
-    async function deleteConversation(conversationId) {
-        if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
-            return;
-        }
-
-        showLoaderInConversationsList();
-
-        try {
-            const response = await fetch(`/api/v1/conversations/${conversationId}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                if (conversationId == currentConversationId) {
-                    currentConversationId = null;
-                    document.getElementById('chatTitle').textContent = 'Nueva Conversación';
-                    document.getElementById('activeConversationName').textContent = 'Ninguna';
-                    document.getElementById('chatHistory').innerHTML = `
-                    <div class="chat-message-assistant p-4">
-                        <div class="flex items-start space-x-3">
-                            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                                <i class="fas fa-robot text-purple-600"></i>
-                            </div>
-                            <div>
-                                <p class="font-semibold text-slate-700">Asistente IA</p>
-                                <div class="text-slate-600 mt-1">
-                                    <p>Selecciona una conversación existente o crea una nueva para comenzar.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                    disableChat();
-                }
-                await loadConversations();
-            } else {
-                console.error('Error deleting conversation');
-                showErrorInConversationsList();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showErrorInConversationsList();
-        }
-    }
-
-    // Limpiar chat actual
-    async function clearCurrentChat() {
-        if (!currentConversationId) return;
-
-        if (!confirm('¿Estás seguro de que quieres limpiar el historial de esta conversación?')) {
-            return;
-        }
-
-        showLoaderInChat();
-
-        try {
-            const response = await fetch(`/api/v1/conversations/${currentConversationId}/messages`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                // Limpiar la UI del chat
-                document.getElementById('chatHistory').innerHTML = '';
-                addChatMessage('assistant', 'El historial de la conversación ha sido limpiado. Puedes comenzar una nueva conversación.', false);
-            } else {
-                console.error('Error clearing chat');
-                showErrorInChat();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showErrorInChat();
-        }
-    }
-
-    // Manejar archivos subidos
-    function handleFiles(files) {
-        if (files.length === 0) return;
-
-        for (let file of files) {
-            uploadedFiles.push({
-                file: file,
-                id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                name: file.name,
-                size: file.size,
-                status: 'pending'
-            });
-        }
-
-        updateFilesList();
-        updateProcessButton();
-    }
-
-    // Actualizar lista de archivos en UI
-    function updateFilesList() {
-        const filesList = document.getElementById('filesList');
-        const fileCount = document.getElementById('fileCount');
-
-        fileCount.textContent = uploadedFiles.length;
-
-        if (uploadedFiles.length === 0) {
-            filesList.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p class="text-sm">No hay archivos subidos</p></div>';
-            return;
-        }
-
-        filesList.innerHTML = uploadedFiles.map(file => `
-            <div class="file-card bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-3">
-                        <i class="fas fa-file text-blue-600"></i>
-                        <div>
-                            <p class="font-medium text-slate-800 text-sm">${file.name}</p>
-                            <p class="text-xs text-slate-500">${formatFileSize(file.size)}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="status-badge px-2 py-1 rounded-full text-xs ${getStatusClass(file.status)}">
-                            ${getStatusText(file.status)}
-                        </span>
-                        <button onclick="removeFile('${file.id}')" class="text-red-500 hover:text-red-700">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Procesar archivos
-    async function processFiles() {
-        if (uploadedFiles.length === 0 || isProcessing) return;
-
-        // Si no hay conversación activa, crear una
-        if (!currentConversationId) {
-            await createNewConversation();
-        }
-
-        isProcessing = true;
-        updateProcessButton();
-        showStatusPanel('Procesando archivos', 'Subiendo y procesando documentos...', 'loading');
-
-        let processedCount = 0;
-
-        for (let fileData of uploadedFiles) {
-            if (fileData.status === 'processed') continue;
-
-            try {
-                const formData = new FormData();
-                formData.append('file', fileData.file);
-                formData.append('session_id', currentSessionId);
-                formData.append('conversation_id', currentConversationId);
-
-                const response = await fetch('/api/v1/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    fileData.status = 'processed';
-                    processedCount++;
-                    updateProgress((processedCount / uploadedFiles.length) * 100);
-                } else {
-                    fileData.status = 'error';
-                    console.error('Error procesando archivo:', fileData.name);
-                }
-            } catch (error) {
-                fileData.status = 'error';
-                console.error('Error:', error);
-            }
-
-            updateFilesList();
-        }
-
-        showStatusPanel('Procesamiento completado', `${processedCount} archivos procesados correctamente`, 'success');
-        updateProcessButton();
-        isProcessing = false;
-
-        // Habilitar chat después de 2 segundos
-        setTimeout(() => {
-            hideStatusPanel();
-            enableChat();
-        }, 2000);
-    }
-
-    // Habilitar funcionalidad de chat
-    function enableChat() {
-        document.getElementById('questionInput').disabled = false;
-        document.getElementById('sendBtn').disabled = false;
-
-        addChatMessage('assistant', '¡Los archivos han sido procesados! Ahora puedes hacer preguntas sobre su contenido. Las respuestas estarán formateadas en **Markdown** para mejor legibilidad.');
-    }
-
-    // Enviar mensaje al chat
-    async function sendMessage(e) {
-        e.preventDefault();
-
-        const questionInput = document.getElementById('questionInput');
-        const question = questionInput.value.trim();
-
-        if (!question || isProcessing || !currentConversationId) return;
-
-        // Añadir mensaje del usuario
-        addChatMessage('user', question);
-        questionInput.value = '';
-        questionInput.disabled = true; // Deshabilitar mientras se procesa
-
-        // Mostrar indicador de typing
-        showTypingIndicator();
-
-        try {
-            const response = await fetch('/api/v1/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    session_id: currentSessionId,
-                    conversation_id: currentConversationId,
-                    question: question,
-                    score_threshold: 0.5,
-                    use_history: true
-                })
-            });
-
-            hideTypingIndicator();
-            questionInput.disabled = false; // Rehabilitar
-
-            if (response.ok) {
-                const data = await response.json();
-                addChatMessage('assistant', data.respuesta);
-
-                // Actualizar el nombre de la conversación si es la primera pregunta
-                if (conversations.find(c => c.id === currentConversationId)?.name === 'Nueva Conversación') {
-                    await updateConversationName(currentConversationId, question.substring(0, 30) + (question.length > 30 ? '...' : ''));
-                }
-            } else {
-                const errorData = await response.json();
-                addChatMessage('assistant', `**Error:** ${errorData.detail || 'No se pudo procesar la pregunta'}`);
-            }
-        } catch (error) {
-            hideTypingIndicator();
-            questionInput.disabled = false; // Rehabilitar en caso de error
-            addChatMessage('assistant', '**Error de conexión:** Por favor, intenta nuevamente.');
-            console.error('Error en sendMessage:', error);
-        }
-    }
-
-    // Actualizar nombre de conversación
-    async function updateConversationName(conversationId, newName) {
-        try {
-            const response = await fetch(`/api/v1/conversation/${conversationId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: newName
-                })
-            });
-
-            if (response.ok) {
-                // Actualizar la lista de conversaciones
-                await loadConversations();
-            } else {
-                console.error('Error updating conversation name:', await response.text());
-            }
-        } catch (error) {
-            console.error('Error updating conversation name:', error);
-        }
-    }
-
-    function showTypingIndicator() {
-        const chatHistory = document.getElementById('chatHistory');
-        const typingDiv = document.createElement('div');
-        typingDiv.id = 'typingIndicator';
-        typingDiv.className = 'chat-message-assistant p-4';
-        typingDiv.innerHTML = `
-            <div class="flex items-start space-x-3">
-                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <i class="fas fa-robot text-purple-600"></i>
-                </div>
-                <div>
-                    <p class="font-semibold text-slate-700">Asistente IA</p>
-                    <div class="typing-indicator mt-1">
-                        <span class="typing-dot"></span>
-                        <span class="typing-dot"></span>
-                        <span class="typing-dot"></span>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        chatHistory.appendChild(typingDiv);
-        chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
-
-    function hideTypingIndicator() {
-        const typingIndicator = document.getElementById('typingIndicator');
-        if (typingIndicator) {
-            typingIndicator.remove();
-        }
-    }
-
-    function showStatusPanel(title, message, type = 'loading') {
-        const panel = document.getElementById('statusPanel');
-        const icon = document.getElementById('statusIcon');
-        const statusTitle = document.getElementById('statusTitle');
-        const statusMessage = document.getElementById('statusMessage');
-
-        icon.innerHTML = type === 'loading'
-            ? '<i class="fas fa-cog fa-spin text-blue-600"></i>'
-            : '<i class="fas fa-check-circle text-green-600"></i>';
-
-        statusTitle.textContent = title;
-        statusMessage.textContent = message;
-        panel.classList.remove('hidden');
-    }
-
-    function hideStatusPanel() {
-        document.getElementById('statusPanel').classList.add('hidden');
-    }
-
-    function updateProgress(percent) {
-        document.querySelector('#progressBar > div').style.width = percent + '%';
-    }
-
-    function updateProcessButton() {
-        const btn = document.getElementById('processBtn');
-        const hasFiles = uploadedFiles.length > 0;
-        const hasPending = uploadedFiles.some(f => f.status === 'pending');
-
-        btn.disabled = !hasFiles || !hasPending || isProcessing;
-        btn.innerHTML = isProcessing
-            ? '<i class="fas fa-cog fa-spin mr-2"></i>Procesando...'
-            : '<i class="fas fa-cog mr-2"></i>Procesar Archivos';
-    }
-
-    function removeFile(fileId) {
-        uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
-        updateFilesList();
-        updateProcessButton();
-    }
-
-    async function clearSession() {
-        if (!confirm('¿Estás seguro de que quieres limpiar la sesión? Se perderán todas las conversaciones y archivos.')) {
-            return;
-        }
-
-        try {
-            await fetch(`/api/v1/sessions/${currentSessionId}`, {
-                method: 'DELETE'
-            });
-        } catch (error) {
-            console.error('Error clearing session:', error);
-        }
-
-        // Limpiar local
-        uploadedFiles = [];
-        conversations = [];
-        currentConversationId = null;
-        currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('notebooklm_session_id', currentSessionId);
-
-        document.getElementById('sessionId').textContent = currentSessionId.substr(0, 12) + '...';
-        document.getElementById('activeConversationName').textContent = 'Ninguna';
-        document.getElementById('chatTitle').textContent = 'Nueva Conversación';
-        document.getElementById('chatHistory').innerHTML = `
-            <div class="chat-message-assistant p-4">
-                <div class="flex items-start space-x-3">
-                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-robot text-purple-600"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-slate-700">Asistente IA</p>
-                        <div class="text-slate-600 mt-1 markdown-content">
-                            <p>¡Sesión reiniciada! Crea una nueva conversación y sube documentos para comenzar.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        updateFilesList();
-        updateProcessButton();
-        document.getElementById('questionInput').disabled = true;
-        document.getElementById('sendBtn').disabled = true;
-
-        // Recargar lista de conversaciones (vacía)
-        loadConversations();
-    }
-
-    async function loadSessionFiles() {
-        try {
-            const response = await fetch(`/api/v1/files/${currentSessionId}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.files && data.files.length > 0) {
-                    document.getElementById('fileCount').textContent = data.files.length;
-                }
-            }
-        } catch (error) {
-            console.error('Error loading session files:', error);
-        }
-    }
-
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function getStatusClass(status) {
-        switch (status) {
-            case 'processed': return 'bg-green-100 text-green-800';
-            case 'error': return 'bg-red-100 text-red-800';
-            default: return 'bg-yellow-100 text-yellow-800';
-        }
-    }
-
-    function getStatusText(status) {
-        switch (status) {
-            case 'processed': return 'Procesado';
-            case 'error': return 'Error';
-            default: return 'Pendiente';
-        }
-    }
-
 </script>
 {% endblock %}
