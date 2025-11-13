@@ -1,0 +1,98 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Get ECR repository names
+        id: ecr-repos
+        run: |
+          echo "app_repo=$(aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `app`)].repositoryName' --output text)" >> $GITHUB_OUTPUT
+          echo "worker_repo=$(aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `worker`)].repositoryName' --output text)" >> $GITHUB_OUTPUT
+      
+      - name: Build, tag, and push App image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ steps.ecr-repos.outputs.app_repo }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      
+      - name: Build, tag, and push Worker image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ steps.ecr-repos.outputs.worker_repo }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      
+      - name: Get ECS cluster and service names
+        id: ecs-info
+        run: |
+          echo "cluster=$(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2)" >> $GITHUB_OUTPUT
+          echo "app_service=$(aws ecs list-services --cluster $(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2) --query 'serviceArns[?contains(@, `app`)]' --output text | cut -d'/' -f3)" >> $GITHUB_OUTPUT
+          echo "worker_service=$(aws ecs list-services --cluster $(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2) --query 'serviceArns[?contains(@, `worker`)]' --output text | cut -d'/' -f3)" >> $GITHUB_OUTPUT
+      
+      - name: Update App ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ steps.ecs-info.outputs.cluster }} \
+            --service ${{ steps.ecs-info.outputs.app_service }} \
+            --force-new-deployment
+      
+      - name: Update Worker ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ steps.ecs-info.outputs.cluster }} \
+            --service ${{ steps.ecs-info.outputs.worker_service }} \
+            --force-new-deployment
+      
+      - name: Wait for App service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.ecs-info.outputs.cluster }} \
+            --services ${{ steps.ecs-info.outputs.app_service }}
+      
+      - name: Wait for Worker service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.ecs-info.outputs.cluster }} \
+            --services ${{ steps.ecs-info.outputs.worker_service }}
+      
+      - name: Deployment complete
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "App service: ${{ steps.ecs-info.outputs.app_service }}"
+          echo "Worker service: ${{ steps.ecs-info.outputs.worker_service }}"
