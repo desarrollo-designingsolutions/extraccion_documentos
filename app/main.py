@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from migrations import run_migrations
+from app.migrations import run_migrations
 from sentence_transformers import CrossEncoder
 from openai import AsyncOpenAI
 from redis.asyncio import Redis

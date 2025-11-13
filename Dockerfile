@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -18,18 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copiar requirements primero (para cache de Docker)
 COPY requirements.txt .
 
-# Instalar dependencias de Python con verificaciones
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copiar el código de la aplicación
-COPY . .
+COPY ./app ./app
 
-# Exponer puerto
 EXPOSE 8000
 
-# Comando para ejecutar la aplicación (sin --reload en producción)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
