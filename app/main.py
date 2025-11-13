@@ -38,11 +38,11 @@ async def shutdown_event():
         logger.exception("Error en shutdown")
 
 # Importar y montar el router de APIs
-from routers import router as api_router
+from app.routers import router as api_router
 app.include_router(api_router, prefix=prefix)
 
 # Importar y montar el web
-from web import router as web_router
+from app.web import router as web_router
 app.include_router(web_router)
 
 if __name__ == "__main__":
