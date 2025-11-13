@@ -93,6 +93,6 @@ jobs:
       
       - name: Deployment complete
         run: |
-          echo "✅ Deployment completed successfully ok!"
+          echo "✅ Deployment completed successfully!"
           echo "App service: ${{ steps.ecs-info.outputs.app_service }}"
           echo "Worker service: ${{ steps.ecs-info.outputs.worker_service }}"
