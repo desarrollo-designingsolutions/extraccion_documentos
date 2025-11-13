@@ -1,5 +1,5 @@
 from sqlalchemy import inspect, text
-from database import engine, Base
+from app.database import engine, Base
 
 def run_migrations():
     # Habilitar pgvector (solo una vez)

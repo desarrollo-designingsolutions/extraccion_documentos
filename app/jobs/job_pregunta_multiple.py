@@ -6,10 +6,10 @@ from typing import List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-from jobs import celery, set_job_state
+from app.jobs import celery, set_job_state
 from sentence_transformers import CrossEncoder
 from openai import AsyncOpenAI
-from utils.helpers import generar_embedding_openai, validate_parsed_response
+from app.utils.helpers import generar_embedding_openai, validate_parsed_response
 import re
 import string
 

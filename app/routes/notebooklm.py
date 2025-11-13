@@ -3,15 +3,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from openai import AsyncOpenAI
 import asyncio
-from database import get_db
-from models import TemporaryFiles, TemporaryFilesChunks, ConversationSession, ConversationMessage
-from utils.helpers import extract_text, split_text, generar_embeddings_async
+from app.database import get_db
+from app.models import TemporaryFiles, TemporaryFilesChunks, ConversationSession, ConversationMessage
+from app.utils.helpers import extract_text, split_text, generar_embeddings_async
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import logging
 from pydantic import BaseModel
-from routes.responder_pregunta import (
+from app.routes.responder_pregunta import (
     get_cached_embedding,
     predict_reranker,
     normalize_distance,

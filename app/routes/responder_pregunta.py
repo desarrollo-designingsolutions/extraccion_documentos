@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
+from app.database import get_db
 from .schemas import RespuestaLLM, PreguntaInput
-from utils.helpers import generar_embedding_openai
+from app.utils.helpers import generar_embedding_openai
 import json
 import logging
 import asyncio
@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from redis.asyncio import Redis  # Import corregido
 from openai import AsyncOpenAI  # Para tipado
 import hashlib
-from utils.helpers import validate_parsed_response
+from app.utils.helpers import validate_parsed_response
 
 router = APIRouter()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

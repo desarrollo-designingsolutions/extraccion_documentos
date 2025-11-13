@@ -1,13 +1,13 @@
 from fastapi import APIRouter
-from routes.scanear_archivos import router as scanear_archivos
-from routes.jobs_status import router as jobs_status
-from routes.responder_pregunta import router as responder_pregunta
-from routes.responder_pregunta_multiple import router as responder_pregunta_multiple
-from routes.estadisticas_archivos import router as estadisticas_archivos
-from routes.search_invoice_number import router as search_invoice_number
-from routes.list_files import router as list_files
-from routes.chat_router import router as chat_router
-from routes.notebooklm import router as notebooklm_router
+from app.routes.scanear_archivos import router as scanear_archivos
+from app.routes.jobs_status import router as jobs_status
+from app.routes.responder_pregunta import router as responder_pregunta
+from app.routes.responder_pregunta_multiple import router as responder_pregunta_multiple
+from app.routes.estadisticas_archivos import router as estadisticas_archivos
+from app.routes.search_invoice_number import router as search_invoice_number
+from app.routes.list_files import router as list_files
+from app.routes.chat_router import router as chat_router
+from app.routes.notebooklm import router as notebooklm_router
 
 # Router principal
 router = APIRouter()

@@ -3,7 +3,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
-from database import Base
+from app.database import Base
 
 class Files(Base):
     __tablename__ = "files"

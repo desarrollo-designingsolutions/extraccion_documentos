@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
-from utils.helpers import generar_embedding_openai
+from app.database import get_db
+from app.utils.helpers import generar_embedding_openai
 import json
 import logging
 import asyncio

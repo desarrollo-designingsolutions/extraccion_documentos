@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from models import Files
-from database import get_db
+from app.models import Files
+from app.database import get_db
 from .schemas import RespuestaExito
 import logging
 import requests
 import os
 from pydantic import BaseModel
-from utils.helpers import (
+from app.utils.helpers import (
     get_s3_client
 )
 

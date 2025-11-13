@@ -2,13 +2,13 @@ import os
 import json
 import logging
 from typing import Dict, Any, List
-from jobs import celery, set_job_state
+from app.jobs import celery, set_job_state
 from typing import Dict, Any, List
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from models import Files, FilesChunks
-from utils.helpers import (
+from app.models import Files, FilesChunks
+from app.utils.helpers import (
     get_s3_client,
     extraer_texto_mejorado_async,
     dividir_en_chunks_semanticos,

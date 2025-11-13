@@ -4,7 +4,7 @@ from botocore.exceptions import ClientError
 import pandas as pd
 from io import BytesIO
 from collections import defaultdict
-from utils.helpers import get_s3_client
+from app.utils.helpers import get_s3_client
 import os
 
 router = APIRouter()
