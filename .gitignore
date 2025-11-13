@@ -3,3 +3,4 @@ app/utils/__pycache__
 app/routes/__pycache__
 app/jobs/__pycache__
 .env
+.history
