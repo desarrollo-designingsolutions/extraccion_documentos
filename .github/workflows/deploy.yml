@@ -30,11 +30,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
-      - name: Get ECR repository names
+      - name: Set ECR repository names
         id: ecr-repos
         run: |
-          echo "app_repo=$(aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `app`)].repositoryName' --output text)" >> $GITHUB_OUTPUT
-          echo "worker_repo=$(aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `worker`)].repositoryName' --output text)" >> $GITHUB_OUTPUT
+          echo "app_repo=extraccion-documentos-prod-app" >> $GITHUB_OUTPUT
+          echo "worker_repo=extraccion-documentos-prod-worker" >> $GITHUB_OUTPUT
       
       - name: Build, tag, and push App image to Amazon ECR
         env:
@@ -58,12 +58,12 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
       
-      - name: Get ECS cluster and service names
+      - name: Set ECS cluster and service names
         id: ecs-info
         run: |
-          echo "cluster=$(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2)" >> $GITHUB_OUTPUT
-          echo "app_service=$(aws ecs list-services --cluster $(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2) --query 'serviceArns[?contains(@, `app`)]' --output text | cut -d'/' -f3)" >> $GITHUB_OUTPUT
-          echo "worker_service=$(aws ecs list-services --cluster $(aws ecs list-clusters --query 'clusterArns[0]' --output text | cut -d'/' -f2) --query 'serviceArns[?contains(@, `worker`)]' --output text | cut -d'/' -f3)" >> $GITHUB_OUTPUT
+          echo "cluster=extraccion-documentos-prod-cluster" >> $GITHUB_OUTPUT
+          echo "app_service=extraccion-documentos-prod-app-service" >> $GITHUB_OUTPUT
+          echo "worker_service=extraccion-documentos-prod-worker-service" >> $GITHUB_OUTPUT
       
       - name: Update App ECS service
         run: |
@@ -93,6 +93,6 @@ jobs:
       
       - name: Deployment complete
         run: |
-          echo "✅ Deployment completed successfully ok!"
+          echo "✅ Deployment completed successfully!"
           echo "App service: ${{ steps.ecs-info.outputs.app_service }}"
           echo "Worker service: ${{ steps.ecs-info.outputs.worker_service }}"
