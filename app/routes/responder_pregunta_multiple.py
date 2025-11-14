@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 from typing import List
 import logging
-from jobs.job_pregunta_multiple import procesar_pregunta_multiple
+from app.jobs.job_pregunta_multiple import procesar_pregunta_multiple
 from .schemas import RespuestaExito
 
 

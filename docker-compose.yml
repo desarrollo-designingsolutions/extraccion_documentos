@@ -41,7 +41,7 @@ services:
       - redis
     volumes:
       - ./app:/app
-    command: ["celery", "-A", "jobs.job_scanear.celery", "worker", "--loglevel=info", "--concurrency=1"]
+    command: ["celery", "-A", "app.jobs.job_scanear.celery", "worker", "--loglevel=info", "--concurrency=1"]
 
 volumes:
   postgres_data:
