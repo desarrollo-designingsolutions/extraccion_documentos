@@ -9,7 +9,7 @@ import os
 router = APIRouter()
 
 # Configurar templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
 api_base_url = "http://app:8000/api/v1"
 
 @router.get("/", response_class=HTMLResponse)
