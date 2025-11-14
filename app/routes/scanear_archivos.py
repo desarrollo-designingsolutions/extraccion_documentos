@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, Body, HTTPException, Query
 from typing import List, Optional
-from jobs.job_scanear import procesar_archivos
+from app.jobs.job_scanear import procesar_archivos
 from .schemas import RespuestaExito
 
 router = APIRouter()
