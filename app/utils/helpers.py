@@ -8,6 +8,8 @@ import os
 import asyncio
 import httpx
 import logging
+import uuid
+from fpdf import FPDF
 from io import BytesIO
 from typing import List, Optional
 from openai import OpenAI
@@ -15,9 +17,8 @@ from botocore.exceptions import NoCredentialsError
 from fastapi import HTTPException
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pdf2image import convert_from_bytes
-import hashlib
 from datetime import datetime
-from typing import Tuple
+from pptx import Presentation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -366,3 +367,128 @@ def split_text(text: str) -> List[str]:
     Función alias para dividir_en_chunks_semanticos para mantener compatibilidad
     """
     return dividir_en_chunks_semanticos(text)
+
+
+def generate_pdf_from_html(html_content: str, filename: str = "documento.pdf"):
+    """
+    Genera PDF con fpdf2 desde HTML básico.
+    Usa SOLO fuentes built-in (Arial/Helvetica).
+    Siempre devuelve bytes válidos (nunca None).
+    """
+    try:
+        if not html_content or html_content.strip() == "":
+            html_content = "<h1>Documento vacío</h1><p>No hay contenido disponible.</p>"
+
+        class PDF(FPDF):
+            def header(self):
+                self.set_font('Helvetica', 'B', 16)
+                self.cell(0, 15, 'Resumen del Documento', align='C', ln=1)
+                self.ln(10)
+
+            def footer(self):
+                self.set_y(-15)
+                self.set_font('Helvetica', 'I', 8)
+                self.cell(0, 10, f'Página {self.page_no()}', align='C')
+
+        pdf = PDF()
+        pdf.add_page()
+        pdf.set_font('Helvetica', '', 12)
+
+        # write_html funciona perfecto con HTML simple
+        pdf.write_html(html_content)
+
+        # fpdf2: pdf.output() sin argumentos devuelve bytes directamente
+        pdf_bytes = pdf.output()
+
+        logger.info(f"PDF generado correctamente con fpdf2 ({len(pdf_bytes)} bytes)")
+        return pdf_bytes
+
+    except Exception as e:
+        logger.error(f"Error crítico generando PDF: {str(e)}")
+        # PDF de emergencia que siempre funciona
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=14)
+        pdf.cell(10, "Error al generar PDF", ln=1, align='C')
+        pdf.set_font("Helvetica", size=12)
+        pdf.multi_cell(0, 10, "No se pudo crear el documento. Intenta de nuevo.")
+        return pdf.output()  # siempre devuelve bytes
+
+def generate_ppt_from_markdown(md_content: str, filename: str):
+    """Parsea Markdown simple y genera PPT ( # para títulos de slides, - para bullets)."""
+    try:
+        if not md_content or md_content.strip() == "":
+            md_content = "# Presentación\n\n- No hay contenido disponible"
+        
+        prs = Presentation()
+        lines = md_content.split('\n')
+        current_slide = None
+        current_tf = None
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith('# '):  # Nuevo slide con título
+                slide_layout = prs.slide_layouts[1]  # Título y contenido
+                current_slide = prs.slides.add_slide(slide_layout)
+                title = current_slide.shapes.title
+                title.text = line[2:].strip()
+                current_tf = current_slide.placeholders[1].text_frame
+                current_tf.text = ""  # Clear default text
+            elif line.startswith('- ') and current_tf:  # Bullet
+                p = current_tf.add_paragraph()
+                p.text = line[2:].strip()
+                p.level = 0  # Nivel de bullet
+            elif line and current_tf and not line.startswith('#'):  # Párrafo normal
+                p = current_tf.add_paragraph()
+                p.text = line
+                p.level = 0
+
+        # Si no se creó ningún slide, crear uno por defecto
+        if not current_slide:
+            slide_layout = prs.slide_layouts[1]
+            current_slide = prs.slides.add_slide(slide_layout)
+            title = current_slide.shapes.title
+            title.text = "Presentación"
+            current_tf = current_slide.placeholders[1].text_frame
+            current_tf.text = "No hay contenido disponible para mostrar."
+
+        output = BytesIO()
+        prs.save(output)
+        return output.getvalue()
+    except Exception as e:
+        logger.error(f"Error generating PPT: {str(e)}")
+        # Crear un PPT de error como fallback
+        prs = Presentation()
+        slide_layout = prs.slide_layouts[1]
+        slide = prs.slides.add_slide(slide_layout)
+        title = slide.shapes.title
+        title.text = "Error"
+        content = slide.placeholders[1].text_frame
+        content.text = "No se pudo generar la presentación."
+        
+        output = BytesIO()
+        prs.save(output)
+        return output.getvalue()
+
+
+def upload_to_s3_and_get_url(file_bytes: any, filename: str, bucket_name: str = os.getenv("AWS_BUCKET")) -> str:
+    if file_bytes is None:
+        raise ValueError("file_bytes no puede ser None")
+
+    if not filename:
+        raise ValueError("filename es obligatorio")
+
+    if bucket_name is None:
+        raise ValueError("bucket_name no puede ser None")
+
+    s3 = get_s3_client()
+    key = f"generated_files/{uuid.uuid4()}_{filename}"
+    
+    s3.put_object(Bucket=bucket_name, Key=key, Body=file_bytes)
+
+    url = s3.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': bucket_name, 'Key': key},
+        ExpiresIn=3600  # 1 hora
+    )
+    return url

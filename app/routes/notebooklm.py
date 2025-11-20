@@ -5,11 +5,12 @@ from openai import AsyncOpenAI
 import asyncio
 from app.database import get_db
 from app.models import TemporaryFiles, TemporaryFilesChunks, ConversationSession, ConversationMessage
-from app.utils.helpers import extract_text, split_text, generar_embeddings_async
+from app.utils.helpers import extract_text, split_text, generar_embeddings_async, generate_pdf_from_html, generate_ppt_from_markdown, upload_to_s3_and_get_url
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import logging
+import json
 from pydantic import BaseModel
 from app.routes.responder_pregunta import (
     get_cached_embedding,
@@ -17,7 +18,6 @@ from app.routes.responder_pregunta import (
     normalize_distance,
     dict_from_row,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -453,9 +453,10 @@ async def fetch_temporary_chunks(
 async def notebook_chat(
     request: Request,
     input_data: ChatRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Endpoint principal para chat con documentos - reemplaza ask y ask_with_history"""
+    """Endpoint principal para chat con documentos + generación de PDF/PPT"""
     
     # Verificar que la sesión tenga archivos
     session_files = db.query(TemporaryFiles).filter(
@@ -472,7 +473,6 @@ async def notebook_chat(
             ConversationSession.id == input_data.conversation_id,
             ConversationSession.session_id == input_data.session_id
         ).first()
-        
         if not conversation_session:
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
     else:
@@ -484,123 +484,146 @@ async def notebook_chat(
         db.commit()
         db.refresh(conversation_session)
     
-    # Obtener historial reciente si se solicita
+    # Historial
     history_context = ""
     if input_data.use_history:
         recent_messages = db.query(ConversationMessage).filter(
             ConversationMessage.session_id == conversation_session.id
         ).order_by(ConversationMessage.created_at.desc()).limit(6).all()
-        
         recent_messages.reverse()
         for msg in recent_messages:
             role_label = "Usuario" if msg.role == "user" else "Asistente"
             history_context += f"{role_label}: {msg.content}\n"
-        
         if history_context:
             history_context = "## Historial de conversación anterior:\n" + history_context + "\n"
 
     # Guardar pregunta del usuario
-    user_message = ConversationMessage(
+    db.add(ConversationMessage(
         session_id=conversation_session.id,
         role="user",
         content=input_data.question
-    )
-    db.add(user_message)
-    
-    # Procesar la pregunta
+    ))
+
+    # === DETECCIÓN DE SOLICITUD DE ARCHIVO ===
+    question_lower = input_data.question.lower()
+    file_type = None
+    if any(palabra in question_lower for palabra in ["pdf", "documento pdf", "genera pdf", "descargar pdf"]):
+        file_type = "pdf"
+    elif any(palabra in question_lower for palabra in ["diapositiva", "powerpoint", "ppt", "presentación", "slides"]):
+        file_type = "ppt"
+
+    # Embedding + búsqueda de chunks (igual que antes)
     redis = request.app.state.redis
     embedding = await get_cached_embedding(redis, input_data.question)
-    if not embedding or not isinstance(embedding, list):
-        logger.error("Embedding inválido")
+    if not embedding:
         raise HTTPException(status_code=400, detail="No se pudo generar embedding")
 
-    # Buscar chunks relevantes
-    results = await fetch_temporary_chunks(
-        db, embedding, input_data.session_id, conversation_session.id
-    )
-    
+    results = await fetch_temporary_chunks(db, embedding, input_data.session_id, conversation_session.id)
     if not results:
-        raise HTTPException(
-            status_code=404, 
-            detail="No se encontraron chunks relevantes en los archivos temporales"
-        )
+        raise HTTPException(status_code=404, detail="No se encontraron fragmentos relevantes")
 
-    # Procesar y rankear chunks
-    chunks_candidatos = [
-        {
-            "id": d.get("id"), 
-            "content": d.get("content", ""), 
-            "distancia": normalize_distance(d.get("distancia", 1.0))
-        }
-        for r in results if (d := dict_from_row(r))
-    ]
-
-    # Reranking
+    # Reranking (igual)
+    chunks_candidatos = [{"content": r.content, "distancia": normalize_distance(r.distancia)} for r in results]
     pares = [[input_data.question, c["content"]] for c in chunks_candidatos]
-    try:
-        scores = await predict_reranker(request, pares, batch_size=8)
-    except Exception:
-        logger.exception("Error en reranking temporal")
-        raise HTTPException(status_code=500, detail="Error en reranking")
+    scores = await predict_reranker(request, pares, batch_size=8)
 
     for i, chunk in enumerate(chunks_candidatos):
         chunk["score_reranking"] = float(scores[i])
-        chunk["score_combinado"] = (
-            0.6 * chunk["score_reranking"] + 
-            0.4 * (1.0 - chunk["distancia"])
-        )
+        chunk["score_combinado"] = 0.6 * chunk["score_reranking"] + 0.4 * (1.0 - chunk["distancia"])
 
-    chunks_ordenados = sorted(
-        chunks_candidatos, 
-        key=lambda x: x["score_combinado"], 
-        reverse=True
-    )
-    
-    chunks_finales = [
-        c for c in chunks_ordenados 
-        if c["score_combinado"] > input_data.score_threshold
-    ] or chunks_ordenados[:2]
-
-    if not chunks_finales:
-        raise HTTPException(
-            status_code=400, 
-            detail="No se encontraron chunks relevantes"
-        )
-
+    chunks_ordenados = sorted(chunks_candidatos, key=lambda x: x["score_combinado"], reverse=True)
+    chunks_finales = [c for c in chunks_ordenados if c["score_combinado"] > input_data.score_threshold] or chunks_ordenados[:2]
     chunks_contexto = chunks_finales[:3]
-    contexto_documentos = "\n\n".join([
-        f"[Fragmento {i+1}]: {chunk['content']}" 
-        for i, chunk in enumerate(chunks_contexto)
-    ])
-    
-    # Combinar historial con contexto de documentos
-    contexto_completo = (
-        history_context + 
-        "## Contexto actual de los documentos:\n" + 
-        contexto_documentos
-    )
+
+    contexto_documentos = "\n\n".join([f"[Fragmento {i+1}]: {c['content']}" for i, c in enumerate(chunks_contexto)])
+    contexto_completo = history_context + "## Contexto actual de los documentos:\n" + contexto_documentos
     distancia_promedio = sum(c["distancia"] for c in chunks_contexto) / len(chunks_contexto)
 
-    # Llamada LLM con contexto completo
-    respuesta_texto = await call_llm_markdown(
-        request, contexto_completo, input_data.question, history_context
+    # === LLAMADA AL LLM CON FORMATO ESPECIAL SI ES PDF O PPT ===
+    respuesta_texto = await call_llm_html(
+        request=request,
+        context=contexto_completo,
+        current_question=input_data.question,
+        history=history_context,
+        file_type=file_type
     )
 
+    # === SI EL USUARIO PIDIÓ ARCHIVO: GENERAR Y SUBIR ===
+    download_url = None
+    if file_type:
+        try:
+            # Validar que respuesta_texto no sea None
+            if respuesta_texto is None:
+                logger.error("respuesta_texto es None, no se puede generar archivo")
+                respuesta_texto = "<h1>Error: No se pudo generar el contenido</h1><p>El contenido solicitado no está disponible.</p>"
+            
+            if file_type == "pdf":
+                file_bytes = generate_pdf_from_html(respuesta_texto, "resumen.pdf")
+                filename = f"Resumen_Documento_{uuid.uuid4().hex[:8]}.pdf"
+            else:  # ppt
+                file_bytes = generate_ppt_from_markdown(respuesta_texto, "presentacion.pptx")
+                filename = f"Presentacion_{uuid.uuid4().hex[:8]}.pptx"
+
+            # Validar que file_bytes no sea None
+            if file_bytes is None:
+                raise ValueError("La generación del archivo devolvió None")
+            
+            # Subir a S3 y obtener URL directa (válida 1 hora)
+            download_url = upload_to_s3_and_get_url(file_bytes, filename)
+
+            # Respuesta bonita con botón de descarga
+            respuesta_texto = f"""
+                <div class="bg-gradient-to-r from-green-50 to-emerald-100 border-l-4 border-green-600 p-6 rounded-r-xl shadow-lg mb-6">
+                    <!-- Encabezado principal -->
+                    <h2 class="text-2xl font-extrabold text-green-800 mb-4">
+                        ✅ ¡Archivo generado con éxito!
+                    </h2>
+
+                    <!-- Mensaje descriptivo -->
+                    <p class="text-green-700 leading-relaxed mb-6">
+                        He creado tu 
+                        <strong class="font-semibold">
+                            {'PDF' if file_type == 'pdf' else 'presentación en PowerPoint'}
+                        </strong> 
+                        basado en los documentos cargados.
+                    </p>
+
+                    <!-- Botón de descarga -->
+                    <a href="{ download_url }" target="_blank" rel="noopener noreferrer" aria-label="Descargar archivo { filename }" class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-transform duration-200 ease-in-out hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        <i class="fas fa-download mr-2"></i>
+                        Descargar { filename }
+                    </a>
+
+                    <!-- Nota informativa -->
+                    <p class="text-sm text-gray-600 mt-4 italic">
+                        ⏳ El enlace expira en 1 hora.
+                    </p>
+                </div>
+            """
+        except Exception as e:
+            logger.error(f"Error generando archivo {file_type}: {str(e)}")
+            respuesta_texto = """
+            <div class="bg-red-100 border-l-4 border-red-600 p-6 rounded-lg">
+                <h3 class="font-bold text-red-800">Error técnico</h3>
+                <p>No se pudo generar el archivo. Intenta de nuevo en unos segundos.</p>
+            </div>
+            """
+
     # Guardar respuesta del asistente
-    assistant_message = ConversationMessage(
+    db.add(ConversationMessage(
         session_id=conversation_session.id,
         role="assistant",
         content=respuesta_texto,
         message_metadata={
             "chunks_utilizados": len(chunks_contexto),
-            "distancia_promedio": distancia_promedio,
+            "distancia_promedio": round(distancia_promedio, 3),
             "modelo": "gpt-4o-mini",
-            "tipo_respuesta": "markdown"
+            "tipo_respuesta": "html" if not file_type else "file_generated",
+            "file_type": file_type,
+            "download_url": download_url
         }
-    )
-    db.add(assistant_message)
-    
-    # Actualizar timestamp de la sesión
+    ))
+
     conversation_session.updated_at = datetime.utcnow()
     db.commit()
 
@@ -672,6 +695,149 @@ async def call_llm_markdown(
     except Exception as e:
         logger.error(f"Error en LLM: {str(e)}")
         raise HTTPException(status_code=500, detail="Error en LLM")
+
+
+async def call_llm_html(
+    request: Request, 
+    context: str, 
+    current_question: str, 
+    history: str = "",
+    file_type: Optional[str] = None
+) -> str:
+    """Genera respuesta en formato HTML o Markdown según si se pide PDF/PPT"""
+    openai_client: AsyncOpenAI = request.app.state.openai_client
+
+    # Prompt base (siempre se usa)
+    system_content = """
+        Eres un asistente especializado en analizar documentos del sector salud. 
+        Responde ÚNICAMENTE con base en el contexto proporcionado. Nunca inventes información.
+    """
+
+    # Caso normal: respuesta HTML bonita para el chat
+    if not file_type:
+        system_content += """
+
+        INSTRUCCIONES PARA RESPUESTA EN CHAT:
+        - Usa HTML puro con clases Tailwind
+        - Haz diseños claros, profesionales y visualmente atractivos
+        - Usa cards, tablas, listas coloreadas, emojis médicos
+        - Output SOLO el HTML crudo, sin ```html ni ningún wrapper
+        """
+
+    # Caso PDF: también HTML bonito (WeasyPrint lo convierte perfecto)
+    elif file_type == "pdf":
+        system_content += """
+
+        ¡IMPORTANTE! El usuario pidió un PDF.
+        Genera HTML SIMPLE (sin clases Tailwind ni CSS complejo) usando solo estas etiquetas:
+        <h1> a <h6>, <p>, <b>, <i>, <u>, <ul>, <ol>, <li>, <table>, <tr>, <th>, <td>, <br>, <hr>
+        Ejemplo:
+        <h1>Resumen del documento</h1>
+        <p>Este es un párrafo normal.</p>
+        <b>Texto en negrita</b>
+        <ul>
+          <li>Punto 1</li>
+          <li>Punto 2</li>
+        </ul>
+        <table border="1">
+          <tr><th>Columna 1</th><th>Columna 2</th></tr>
+          <tr><td>Dato</td><td>Valor</td></tr>
+        </table>
+
+        NO uses clases Tailwind, div con bg-*, etc. Solo HTML básico que FPDF entienda.
+        Output SOLO el HTML crudo.
+        """
+
+    # Caso PPT/PowerPoint: Markdown limpio y estructurado
+    elif file_type == "ppt":
+        system_content += """
+
+        ¡IMPORTANTE! El usuario pidió una presentación en PowerPoint.
+        Genera SOLO Markdown estructurado de esta forma exacta:
+
+        # Título del Slide 1
+        - Bullet punto 1
+        - Bullet punto 2
+        - Otro punto importante
+
+        # Título del Slide 2
+        - Primer punto
+        - Segundo punto con más detalle
+
+        Reglas estrictas:
+        - Cada slide empieza con # seguido de espacio y el título
+        - Los bullets siempre con - y espacio
+        - Máximo 6 líneas por slide
+        - No uses negritas, cursivas ni nada más que # y -
+        - NO uses ```markdown ni bloques de código
+        - Output SOLO el Markdown puro
+        """
+
+    # Prompt del usuario (siempre igual)
+    user_content = f"""
+        ## CONTEXTO DE DOCUMENTOS:
+        {context}
+
+        ## HISTORIAL DE CONVERSACIÓN:
+        {history}
+
+        ## PREGUNTA DEL USUARIO:
+        {current_question}
+
+        Responde exactamente según las instrucciones de arriba.
+    """
+
+    try:
+        logger.info(f"Enviando a LLM (file_type={file_type or 'html'}): {current_question[:100]}...")
+
+        completion = await asyncio.wait_for(
+            openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_content.strip()},
+                    {"role": "user", "content": user_content.strip()},
+                ],
+                temperature=0.1,
+                max_tokens=3000,  # más tokens para PDFs grandes
+            ),
+            timeout=90.0
+        )
+        
+        respuesta = completion.choices[0].message.content.strip()
+
+        # Validar que la respuesta no sea None
+        if respuesta is None:
+            logger.warning("LLM devolvió None, usando contenido por defecto")
+            if file_type == "ppt":
+                respuesta = "# Resumen\n\n- No se pudo generar el contenido solicitado"
+            else:
+                respuesta = "<h1>Resumen</h1><p>No se pudo generar el contenido solicitado.</p>"
+        else:
+            respuesta = respuesta.strip()
+
+        # Limpieza de seguridad por si el modelo se equivoca y pone bloques
+        if respuesta.startswith("```"):
+            respuesta = respuesta.split("\n", 1)[1]
+        if respuesta.endswith("```"):
+            respuesta = respuesta.rsplit("\n", 1)[0]
+
+        logger.info(f"Respuesta recibida ({'HTML' if not file_type or file_type=='pdf' else 'Markdown'}): {len(respuesta)} caracteres")
+        return respuesta.strip()
+        
+    except asyncio.TimeoutError:
+        logger.error("Timeout en llamada a LLM")
+        fallback = "<h1>Error de tiempo</h1><p>El modelo tardó demasiado. Intenta con una pregunta más corta.</p>"
+        if file_type == "ppt":
+            fallback = "# Error\n\n- El modelo tardó demasiado en responder"
+        return fallback
+
+    except Exception as e:
+        logger.error(f"Error en LLM: {str(e)}")
+        fallback = f"<h1>Error interno</h1><p>No se pudo contactar al modelo: {str(e)[:100]}</p>"
+        if file_type == "ppt":
+            fallback = "# Error\n\n- Fallo interno del modelo de IA"
+        return fallback
+
 
 @router.post("/cleanup")
 async def cleanup_expired_files(db: Session = Depends(get_db)):

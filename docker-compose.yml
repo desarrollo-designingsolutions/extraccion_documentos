@@ -29,7 +29,7 @@ services:
     depends_on:
       - db
     volumes:
-      - ./app:/app
+      - ./app:/app/app
   
   worker:
     build: ./
@@ -40,8 +40,16 @@ services:
       - db
       - redis
     volumes:
-      - ./app:/app
+      - ./app:/app/app
     command: ["celery", "-A", "app.jobs.job_scanear.celery", "worker", "--loglevel=info", "--concurrency=1"]
+
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    restart: always
 
 volumes:
   postgres_data:
