@@ -3,6 +3,7 @@ from app.migrations import run_migrations
 from sentence_transformers import CrossEncoder
 from openai import AsyncOpenAI
 from redis.asyncio import Redis
+import torch
 import logging
 import os
 
@@ -15,9 +16,20 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_event():
     run_migrations()
-    logger.info("Cargando modelo reranker en startup")
-    app.state.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device='cpu' or 'cuda')
-    logger.info("Reranker cargado")
+    
+    # Detectar si hay GPU disponible
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logger.info(f"Cargando modelo reranker en startup usando device: {device}")
+    
+    app.state.reranker = CrossEncoder(
+        "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        device=device
+    )
+    
+    logger.info(f"Reranker cargado en {device}")
+    if device == 'cuda':
+        logger.info(f"GPU detectada: {torch.cuda.get_device_name(0)}")
+    
     app.state.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     app.state.redis = await Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
