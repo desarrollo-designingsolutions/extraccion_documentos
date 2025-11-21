@@ -19,6 +19,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pdf2image import convert_from_bytes
 from datetime import datetime
 from pptx import Presentation
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+import pandas as pd
+import json
 
 logging.basicConfig(
     level=logging.INFO,
@@ -492,3 +497,88 @@ def upload_to_s3_and_get_url(file_bytes: any, filename: str, bucket_name: str = 
         ExpiresIn=3600  # 1 hora
     )
     return url
+
+
+def generate_docx_from_html(html_content: str, filename: str = "documento.docx") -> bytes:
+    """Genera Word desde HTML básico desde HTML/Markdown"""
+    try:
+        if not html_content:
+            html_content = "No hay contenido disponible."
+
+        doc = Document()
+        doc.add_heading('Resumen del Documento', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Parseo muy simple de HTML/Markdown
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        for elem in soup.recursiveChildGenerator():
+            if isinstance(elem, str) and elem.strip():
+                p = doc.add_paragraph(elem.strip())
+            elif elem.name == 'h1':
+                doc.add_heading(elem.text, level=1)
+            elif elem.name == 'h2':
+                doc.add_heading(elem.text, level=2)
+            elif elem.name in ['b', 'strong']:
+                run = doc.paragraphs[-1].add_run(elem.text)
+                run.bold = True
+            elif elem.name in ['ul', 'ol']:
+                for li in elem.find_all('li', recursive=False):
+                    doc.add_paragraph(li.text, style='List Bullet' if elem.name == 'ul' else 'List Number')
+
+        output = BytesIO()
+        doc.save(output)
+        return output.getvalue()
+    except Exception as e:
+        logger.error(f"Error generando DOCX: {e}")
+        # DOCX de emergencia
+        doc = Document()
+        doc.add_paragraph("Error al generar documento Word")
+        output = BytesIO()
+        doc.save(output)
+        return output.getvalue()
+
+def generate_excel_from_markdown(md_content: str, filename: str = "datos.xlsx") -> bytes:
+    """Genera Excel desde tabla Markdown o JSON"""
+    try:
+        # Intentamos interpretar como tabla Markdown
+        lines = [line.strip() for line in md_content.split('\n') if line.strip()]
+        data = []
+        for line in lines:
+            if line.startswith('|'):
+                row = [cell.strip() for cell in line.split('|')[1:-1]]
+                if row:
+                    data.append(row)
+
+        if len(data) > 1:
+            df = pd.DataFrame(data[1:], columns=data[0])
+        else:
+            # Si no es tabla, creamos hoja con texto
+            df = pd.DataFrame({"Contenido": [md_content]})
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Hoja1')
+        return output.getvalue()
+    except Exception as e:
+        logger.error(f"Error generando Excel: {e}")
+        df = pd.DataFrame({"Error": ["No se pudo generar la hoja de cálculo"]})
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        return output.getvalue()
+
+def generate_csv_from_markdown(md_content: str, filename: str = "datos.csv") -> bytes:
+    """Genera CSV desde tabla Markdown"""
+    try:
+        lines = [line.strip() for line in md_content.split('\n') if line.strip() and line.startswith('|')]
+        data = []
+        for line in lines:
+            if line.startswith('|'):
+                row = [cell.strip() for cell in line.split('|')[1:-1]]
+                if row:
+                    data.append(row)
+        df = pd.DataFrame(data[1:], columns=data[0]) if len(data) > 1 else pd.DataFrame({"Contenido": [md_content]})
+        return df.to_csv(index=False).encode('utf-8')
+    except Exception as e:
+        logger.error(f"Error generando CSV: {e}")
+        return b"Error,No se pudo generar el archivo CSV"

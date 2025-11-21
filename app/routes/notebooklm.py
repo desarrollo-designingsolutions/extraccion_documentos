@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 import asyncio
 from app.database import get_db
 from app.models import TemporaryFiles, TemporaryFilesChunks, ConversationSession, ConversationMessage
-from app.utils.helpers import extract_text, split_text, generar_embeddings_async, generate_pdf_from_html, generate_ppt_from_markdown, upload_to_s3_and_get_url
+from app.utils.helpers import extract_text, split_text, generar_embeddings_async, generate_pdf_from_html, generate_ppt_from_markdown, generate_docx_from_html, generate_excel_from_markdown, generate_csv_from_markdown, upload_to_s3_and_get_url
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
@@ -507,10 +507,16 @@ async def notebook_chat(
     # === DETECCIÓN DE SOLICITUD DE ARCHIVO ===
     question_lower = input_data.question.lower()
     file_type = None
-    if any(palabra in question_lower for palabra in ["pdf", "documento pdf", "genera pdf", "descargar pdf"]):
+    if any(p in question_lower for p in ["pdf", "documento pdf"]):
         file_type = "pdf"
-    elif any(palabra in question_lower for palabra in ["diapositiva", "powerpoint", "ppt", "presentación", "slides"]):
+    elif any(p in question_lower for p in ["powerpoint", "ppt", "diapositiva", "presentación", "slides"]):
         file_type = "ppt"
+    elif any(p in question_lower for p in ["word", "docx", "documento word"]):
+        file_type = "docx"
+    elif any(p in question_lower for p in ["excel", "hoja de cálculo", "xlsx"]):
+        file_type = "xlsx"
+    elif "csv" in question_lower:
+        file_type = "csv"
 
     # Embedding + búsqueda de chunks (igual que antes)
     redis = request.app.state.redis
@@ -559,10 +565,21 @@ async def notebook_chat(
             
             if file_type == "pdf":
                 file_bytes = generate_pdf_from_html(respuesta_texto, "resumen.pdf")
-                filename = f"Resumen_Documento_{uuid.uuid4().hex[:8]}.pdf"
-            else:  # ppt
+                filename = f"Resumen_{uuid.uuid4().hex[:8]}.pdf"
+            elif file_type == "ppt":
                 file_bytes = generate_ppt_from_markdown(respuesta_texto, "presentacion.pptx")
                 filename = f"Presentacion_{uuid.uuid4().hex[:8]}.pptx"
+            elif file_type == "docx":
+                file_bytes = generate_docx_from_html(respuesta_texto, "documento.docx")
+                filename = f"Documento_{uuid.uuid4().hex[:8]}.docx"
+            elif file_type in ["xlsx", "csv"]:
+                # Para Excel y CSV usamos el mismo contenido (tabla Markdown)
+                if file_type == "xlsx":
+                    file_bytes = generate_excel_from_markdown(respuesta_texto)
+                    filename = f"Datos_{uuid.uuid4().hex[:8]}.xlsx"
+                else:
+                    file_bytes = generate_csv_from_markdown(respuesta_texto)
+                    filename = f"Datos_{uuid.uuid4().hex[:8]}.csv"
 
             # Validar que file_bytes no sea None
             if file_bytes is None:
@@ -571,34 +588,41 @@ async def notebook_chat(
             # Subir a S3 y obtener URL directa (válida 1 hora)
             download_url = upload_to_s3_and_get_url(file_bytes, filename)
 
-            # Respuesta bonita con botón de descarga
+            # Diccionario para nombre bonito según el tipo de archivo
+            tipo_nombre = {
+                "pdf": "PDF",
+                "ppt": "presentación en PowerPoint",
+                "docx": "documento Word",
+                "xlsx": "hoja de cálculo Excel",
+                "csv": "archivo CSV"
+            }.get(file_type, file_type.upper())
+
+            # Respuesta bonita con botón de descarga (funciona para los 5 formatos)
             respuesta_texto = f"""
-                <div class="bg-gradient-to-r from-green-50 to-emerald-100 border-l-4 border-green-600 p-6 rounded-r-xl shadow-lg mb-6">
-                    <!-- Encabezado principal -->
-                    <h2 class="text-2xl font-extrabold text-green-800 mb-4">
-                        ✅ ¡Archivo generado con éxito!
-                    </h2>
+            <div class="bg-gradient-to-r from-green-50 to-emerald-100 border-l-4 border-green-600 p-6 rounded-r-xl shadow-lg mb-6 max-w-3xl mx-auto">
+                <!-- Encabezado principal -->
+                <h2 class="text-2xl font-extrabold text-green-800 mb-4 flex items-center">
+                    ✅ ¡{tipo_nombre} generado con éxito!
+                </h2>
 
-                    <!-- Mensaje descriptivo -->
-                    <p class="text-green-700 leading-relaxed mb-6">
-                        He creado tu 
-                        <strong class="font-semibold">
-                            {'PDF' if file_type == 'pdf' else 'presentación en PowerPoint'}
-                        </strong> 
-                        basado en los documentos cargados.
-                    </p>
+                <!-- Mensaje descriptivo -->
+                <p class="text-green-700 leading-relaxed mb-6 text-lg">
+                    He creado tu <strong>{tipo_nombre.lower()}</strong> con la información extraída de los documentos cargados.
+                </p>
 
-                    <!-- Botón de descarga -->
-                    <a href="{ download_url }" target="_blank" rel="noopener noreferrer" aria-label="Descargar archivo { filename }" class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-transform duration-200 ease-in-out hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                        <i class="fas fa-download mr-2"></i>
-                        Descargar { filename }
+                <!-- Botón de descarga grande y bonito -->
+                <div class="text-center my-8">
+                    <a href="{download_url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-green-400">
+                        <i class="fas fa-download mr-3 text-xl"></i>
+                        Descargar {filename}
                     </a>
-
-                    <!-- Nota informativa -->
-                    <p class="text-sm text-gray-600 mt-4 italic">
-                        ⏳ El enlace expira en 1 hora.
-                    </p>
                 </div>
+
+                <!-- Nota de expiración -->
+                <p class="text-center text-sm text-gray-600 mt-6 italic">
+                    ⏳ Este enlace expira en 1 hora • Generado el {datetime.utcnow().strftime('%d/%m/%Y a las %H:%M')} UTC
+                </p>
+            </div>
             """
         except Exception as e:
             logger.error(f"Error generando archivo {file_type}: {str(e)}")
@@ -772,6 +796,11 @@ async def call_llm_html(
         - NO uses ```markdown ni bloques de código
         - Output SOLO el Markdown puro
         """
+    
+    elif file_type == "docx":
+        system_content += "\nGenera contenido en HTML/Markdown simple para Word (títulos, listas, tablas)."
+    elif file_type in ["xlsx", "csv"]:
+        system_content += "\nGenera una TABLA en formato Markdown con | (el usuario pidió datos en Excel/CSV)."
 
     # Prompt del usuario (siempre igual)
     user_content = f"""
