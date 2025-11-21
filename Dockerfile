@@ -1,6 +1,10 @@
 # Usar imagen base con CUDA para soporte GPU
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
+# Configurar timezone para instalación no-interactiva
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Bogota
+
 # Instalar Python 3.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
